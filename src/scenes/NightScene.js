@@ -268,6 +268,13 @@ export class NightScene {
     const leftClosed = !this._officeSystem.leftDoorOpen;
     const rightClosed = !this._officeSystem.rightDoorOpen;
 
+    if (this._officeSystem.leftLightOn) {
+      this._renderLightEffect(ctx, 'left', officeX, w, h);
+    }
+    if (this._officeSystem.rightLightOn) {
+      this._renderLightEffect(ctx, 'right', officeX, w, h);
+    }
+
     let bgKey = 'office_bg';
     if (leftClosed && rightClosed) {
       bgKey = 'office_bg_all_dors_close';
@@ -303,10 +310,12 @@ export class NightScene {
       if (enemy.isDefeated) continue;
 
       if (enemy.currentRoom === leftDoorRoom && !leftClosed) {
-        this._renderEnemyAtDoor(ctx, 'left', officeX, w, h);
+        const lightOn = this._officeSystem.leftLightOn;
+        this._renderEnemyAtDoor(ctx, 'left', officeX, w, h, lightOn);
       }
       if (enemy.currentRoom === rightDoorRoom && !rightClosed) {
-        this._renderEnemyAtDoor(ctx, 'right', officeX, w, h);
+        const lightOn = this._officeSystem.rightLightOn;
+        this._renderEnemyAtDoor(ctx, 'right', officeX, w, h, lightOn);
       }
     }
   }
@@ -328,10 +337,12 @@ export class NightScene {
   }
 
   _renderLightEffect(ctx, side, officeX, w, h) {
-    const x = side === 'left' ? officeX + w * 0.15 : officeX + w * 0.75;
-    const maxDim = Math.max(w, h);
-    const gradient = ctx.createRadialGradient(x, h * 0.4, 0, x, h * 0.4, maxDim * 0.25);
-    gradient.addColorStop(0, 'rgba(255, 255, 200, 0.2)');
+    const doorPos = side === 'left' ? DOOR_POSITIONS_PERCENT.left : DOOR_POSITIONS_PERCENT.right;
+    const x = doorPos.x * w;
+    const y = doorPos.y * h;
+    const radius = Math.max(w, h) * 0.3;
+    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    gradient.addColorStop(0, 'rgba(255, 255, 200, 0.4)');
     gradient.addColorStop(1, 'transparent');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, w, h);
@@ -344,8 +355,9 @@ export class NightScene {
    * @param {number} officeX
    * @param {number} w
    * @param {number} h
+   * @param {boolean} [lightOn]
    */
-  _renderEnemyAtDoor(ctx, side, officeX, w, h) {
+  _renderEnemyAtDoor(ctx, side, officeX, w, h, lightOn = false) {
     const doorRoom = side === 'left' ? 'dock' : 'generator';
     const enemy = this._enemies.find(e => e.currentRoom === doorRoom && !e.isDefeated);
     if (!enemy) return;
@@ -371,7 +383,7 @@ export class NightScene {
     ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Eyes — glowing white
+    // Eyes — glowing white (only when light is on)
     ctx.fillStyle = '#ffffff';
     ctx.beginPath();
     ctx.arc(x + size * 0.35, y + size * 0.35, size * 0.1, 0, Math.PI * 2);
@@ -395,6 +407,23 @@ export class NightScene {
     ctx.fillStyle = '#ffffff';
     for (let i = -1; i <= 1; i++) {
       ctx.fillRect(x + size / 2 + i * size * 0.1 - 2, y + size * 0.65, 4, 5);
+    }
+
+    // Multiply blend darkening when light is off
+    if (!lightOn) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillStyle = '#1a1a1a';
+      ctx.beginPath();
+      ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+      ctx.fill();
+      // Also darken the eyes
+      ctx.fillStyle = '#000000';
+      ctx.beginPath();
+      ctx.arc(x + size * 0.35, y + size * 0.35, size * 0.1, 0, Math.PI * 2);
+      ctx.arc(x + size * 0.65, y + size * 0.35, size * 0.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
     }
   }
 
