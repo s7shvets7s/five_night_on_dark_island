@@ -1,0 +1,3961 @@
+### main.js 
+------------------------------------------------------------ 
+import { Game } from './engine/Game.js';
+import { SCENES, GAME_TITLE, GAME_VERSION } from './config/gameConfig.js';
+import { BootScene } from './scenes/BootScene.js';
+import { TitleScene } from './scenes/TitleScene.js';
+import { NightScene } from './scenes/NightScene.js';
+import { GameOverScene } from './scenes/GameOverScene.js';
+import { VictoryScene } from './scenes/VictoryScene.js';
+import { PauseScene } from './scenes/PauseScene.js';
+import { AudioManager } from './engine/AudioManager.js';
+import { eventBus } from './engine/EventBus.js';
+
+/**
+ * Application bootstrap.
+ * Creates the Game instance, registers scenes, and starts the loop.
+ */
+function bootstrap() {
+  const canvas = document.getElementById('game-canvas');
+  if (!canvas) {
+    console.error('[Bootstrap] Canvas element not found');
+    return;
+  }
+
+  const game = new Game(canvas);
+  const audioManager = new AudioManager();
+
+  let currentNightId = 1;
+
+  function createNightScene(nightId) {
+    return new NightScene({
+      onSceneChange: (name) => game.sceneManager.change(name),
+      onPause: () => game.sceneManager.push(SCENES.PAUSE),
+      inputManager: game.inputManager,
+      audioManager,
+      nightId,
+    });
+  }
+
+  const sceneDeps = {
+    onSceneChange: (name) => game.sceneManager.change(name),
+    onPause: () => game.sceneManager.push(SCENES.PAUSE),
+    onResume: () => game.sceneManager.pop(),
+    inputManager: game.inputManager,
+  };
+
+  game.registerScene(SCENES.BOOT, new BootScene(sceneDeps));
+  game.registerScene(SCENES.TITLE, new TitleScene(sceneDeps));
+  game.registerScene(SCENES.GAME_OVER, new GameOverScene(sceneDeps));
+  game.registerScene(SCENES.PAUSE, new PauseScene(sceneDeps));
+
+  game.registerScene(SCENES.NIGHT, createNightScene(currentNightId));
+  game.registerScene(SCENES.VICTORY, new VictoryScene(sceneDeps));
+
+  eventBus.on('game:night-change', ({ nightId }) => {
+    currentNightId = nightId;
+    game.registerScene(SCENES.NIGHT, createNightScene(currentNightId));
+  });
+
+  // Hook into scene pop to resume the NightScene
+  const originalPop = game.sceneManager.pop.bind(game.sceneManager);
+  game.sceneManager.pop = () => {
+    const top = game.sceneManager._stack[game.sceneManager._stack.length - 1];
+    if (top?.scene?.resume) {
+      top.scene.resume();
+    }
+    originalPop();
+  };
+
+  game.start();
+
+  console.log(`[Bootstrap] ${GAME_TITLE} v${GAME_VERSION} started`);
+}
+
+bootstrap();
+ 
+ 
+### ai\EnemyAI.js 
+------------------------------------------------------------ 
+/**
+ * EnemyAI — AI behavior for enemy movement and attacks.
+ * Uses aggression level and randomness to determine movement timing.
+ */
+export class EnemyAI {
+  /**
+   * @param {Object} deps
+   * @param {EventBus} deps.eventBus
+   */
+  constructor({ eventBus }) {
+    this._eventBus = eventBus;
+  }
+
+  /**
+   * Update enemy AI logic.
+   * @param {Enemy} enemy - Enemy entity
+   * @param {Object} enemyDef - Enemy definition from enemies.js
+   * @param {number} dt - Delta time in milliseconds
+   * @param {Object} officeSystem - OfficeSystem instance
+   * @returns {'moved'|'attacked'|'blocked'|null}
+   */
+  update(enemy, enemyDef, dt, officeSystem) {
+    if (enemy.isDefeated) return null;
+
+    enemy.tickMoveTimer(dt);
+
+    // Complete movement after a brief transition
+    if (enemy.isMoving && enemy.moveTimer > 500) {
+      enemy.completeMove();
+    }
+
+    if (enemy.isMoving) return null;
+
+    // Calculate move interval based on aggression
+    const aggressionFactor = enemy.aggression / 20; // 0-1
+    const moveInterval = enemyDef.moveIntervalMs * (1 - aggressionFactor * 0.7)
+      + Math.random() * enemyDef.moveIntervalVariance * (1 - aggressionFactor);
+
+    if (enemy.moveTimer < moveInterval) return null;
+
+    enemy.resetMoveTimer();
+
+    // Check if enemy is at door
+    if (enemy.isAtOfficeDoor && enemyDef.canAttackFromDoor) {
+      return this._attemptAttack(enemy, enemyDef, officeSystem);
+    }
+
+    // Move towards office
+    return this._moveTowardsOffice(enemy, enemyDef);
+  }
+
+  /**
+   * Move enemy one step closer to office.
+   * @param {Enemy} enemy
+   * @param {Object} enemyDef
+   * @returns {'moved'|null}
+   */
+  _moveTowardsOffice(enemy, enemyDef) {
+    const path = enemyDef.preferredPath;
+    const currentIndex = path.indexOf(enemy.currentRoom);
+
+    if (currentIndex === -1) {
+      // Enemy not on path, move to first room
+      enemy.moveTo(path[0]);
+      this._eventBus.emit('enemy:move', { enemyId: enemy.id, from: null, to: path[0] });
+      return 'moved';
+    }
+
+    if (currentIndex >= path.length - 1) {
+      return null; // Already at end of path (door)
+    }
+
+    // Aggression-based chance to move forward
+    const moveChance = 0.3 + (enemy.aggression / 20) * 0.7;
+    if (Math.random() > moveChance) return null;
+
+    const nextRoom = path[currentIndex + 1];
+    const from = enemy.currentRoom;
+    enemy.moveTo(nextRoom);
+    this._eventBus.emit('enemy:move', { enemyId: enemy.id, from, to: nextRoom });
+    return 'moved';
+  }
+
+  /**
+   * Attempt to attack from door.
+   * @param {Enemy} enemy
+   * @param {Object} enemyDef
+   * @param {Object} officeSystem
+   * @returns {'attacked'|'blocked'}
+   */
+  _attemptAttack(enemy, enemyDef, officeSystem) {
+    const isLeftDoor = enemy.currentRoom === 'dock';
+    const doorClosed = isLeftDoor ? !officeSystem.leftDoorOpen : !officeSystem.rightDoorOpen;
+
+    if (doorClosed) {
+      enemy.defeat();
+      return 'blocked';
+    }
+
+    return 'attacked';
+  }
+}
+ 
+ 
+### config\gameConfig.js 
+------------------------------------------------------------ 
+/**
+ * Global game configuration.
+ * All tunable values live here — never hardcode magic numbers.
+ * Dynamic scaling is handled at runtime based on viewport.
+ */
+
+/** Debug and development flags */
+export const CONFIG = {
+  DEBUG: false,
+  USE_PLACEHOLDER_ASSETS: true,
+  AUTO_WIN_FOR_TEST: false,
+  DISABLE_ADS: true,
+  GOD_MODE: false,
+};
+
+/** Game identity */
+export const GAME_TITLE = 'Island Night Watch';
+export const GAME_VERSION = '0.1.0';
+
+/** Base resolution — used as reference for proportional UI scaling */
+export const BASE_WIDTH = 1280;
+export const BASE_HEIGHT = 720;
+
+/** Target framerate for fixed-step game loop */
+export const TARGET_FPS = 60;
+
+/** Scene identifiers */
+export const SCENES = {
+  BOOT: 'BootScene',
+  TITLE: 'TitleScene',
+  NIGHT: 'NightScene',
+  GAME_OVER: 'GameOverScene',
+  VICTORY: 'VictoryScene',
+  PAUSE: 'PauseScene',
+};
+
+/** Starting scene on launch */
+export const START_SCENE = SCENES.BOOT;
+
+/** Color palette — horror / surveillance theme */
+export const COLORS = {
+  BACKGROUND: '#0a0a0a',
+  BACKGROUND_DARK: '#050505',
+  ACCENT_RED: '#8b0000',
+  ACCENT_RED_BRIGHT: '#cc2222',
+  TEXT_PRIMARY: '#e0e0e0',
+  TEXT_SECONDARY: '#888888',
+  TEXT_DIM: '#444444',
+  UI_BORDER: '#2a2a2a',
+  UI_BG: '#111111',
+  WARNING: '#ff4400',
+  POWER_LOW: '#ff6600',
+  POWER_OK: '#44aa44',
+  SCANLINE: 'rgba(0, 0, 0, 0.04)',
+};
+
+/** UI layout constants — relative to base resolution */
+export const UI = {
+  PADDING: 20,
+  FONT_TITLE: 48,
+  FONT_SUBTITLE: 18,
+  FONT_BODY: 14,
+  FONT_SMALL: 11,
+  BAR_HEIGHT: 6,
+  INTERACTIVE_MIN: 44, // minimum touch target px
+};
+
+/** Scaling config — canvas adapts to viewport dynamically */
+export const SCALING = {
+  /** How the game fills the screen: 'stretch' fills entirely, 'contain' fits with letterbox, 'cover' crops to fill */
+  FIT_MODE: 'stretch',
+  /** Pixel ratio cap to prevent over-rendering on high-DPR devices */
+  MAX_DPR: 2,
+  /** Minimum logical width before scaling becomes problematic */
+  MIN_WIDTH: 640,
+  /** Minimum logical height */
+  MIN_HEIGHT: 360,
+};
+ 
+ 
+### data\enemies.js 
+------------------------------------------------------------ 
+/**
+ * Enemy definitions.
+ * Each enemy has movement patterns, attack behavior, and visual properties.
+ */
+
+/**
+ * @typedef {Object} EnemyDef
+ * @property {string} id - Unique identifier
+ * @property {string} name - Display name
+ * @property {string} color - Primary color for placeholder rendering
+ * @property {string[]} preferredPath - Preferred room path towards office
+ * @property {number} moveIntervalMs - Base time between moves
+ * @property {number} moveIntervalVariance - Random variance on move interval
+ * @property {boolean} canAttackFromDoor - Whether enemy attacks from door position
+ * @property {boolean} requiresLightCheck - Whether light reveals enemy at door
+ * @property {string} attackRoom - Room from which enemy attacks (usually office)
+ */
+
+/** @type {EnemyDef[]} */
+export const ENEMIES = [
+  {
+    id: 'bonnie',
+    name: 'Bonnie',
+    color: '#6644aa',
+    preferredPath: ['helipad', 'golden_temple', 'staff_quarters', 'guest_house', 'dock'],
+    moveIntervalMs: 8000,
+    moveIntervalVariance: 4000,
+    canAttackFromDoor: true,
+    requiresLightCheck: true,
+    attackRoom: 'office',
+  },
+  {
+    id: 'chica',
+    name: 'Chica',
+    color: '#ccaa22',
+    preferredPath: ['helipad', 'golden_temple', 'greenhouse', 'beach_house', 'generator'],
+    moveIntervalMs: 9000,
+    moveIntervalVariance: 5000,
+    canAttackFromDoor: true,
+    requiresLightCheck: true,
+    attackRoom: 'office',
+  },
+  {
+    id: 'freddy',
+    name: 'Freddy',
+    color: '#885522',
+    preferredPath: ['helipad', 'golden_temple', 'beach_house', 'generator'],
+    moveIntervalMs: 12000,
+    moveIntervalVariance: 6000,
+    canAttackFromDoor: true,
+    requiresLightCheck: false,
+    attackRoom: 'office',
+  },
+];
+
+/** @type {Record<string, EnemyDef>} */
+export const ENEMY_MAP = Object.fromEntries(ENEMIES.map(e => [e.id, e]));
+ 
+ 
+### data\nights.js 
+------------------------------------------------------------ 
+/**
+ * Night definitions.
+ * Each night defines duration, enemy spawns, and difficulty modifiers.
+ */
+
+/**
+ * @typedef {Object} EnemySpawn
+ * @property {string} enemyId - Which enemy to spawn
+ * @property {number} aggression - AI level 0-20 (FNAF-style)
+ * @property {number} startHour - Hour when enemy becomes active (0-6)
+ * @property {string} startRoom - Initial room for this enemy
+ */
+
+/**
+ * @typedef {Object} Night
+ * @property {number} id - Night number
+ * @property {string} name - Display name
+ * @property {number} durationMs - Total night duration in ms (6 game hours)
+ * @property {EnemySpawn[]} spawns - Enemy configurations for this night
+ */
+
+/** @type {Night[]} */
+export const NIGHTS = [
+  {
+    id: 1,
+    name: 'Night 1',
+    durationMs: 180000,
+    spawns: [
+      { enemyId: 'bonnie', aggression: 3, startHour: 0, startRoom: 'helipad' },
+    ],
+  },
+  {
+    id: 2,
+    name: 'Night 2',
+    durationMs: 210000,
+    spawns: [
+      { enemyId: 'bonnie', aggression: 5, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'chica', aggression: 3, startHour: 1, startRoom: 'helipad' },
+    ],
+  },
+  {
+    id: 3,
+    name: 'Night 3',
+    durationMs: 240000,
+    spawns: [
+      { enemyId: 'bonnie', aggression: 7, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'chica', aggression: 5, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'freddy', aggression: 2, startHour: 2, startRoom: 'helipad' },
+    ],
+  },
+  {
+    id: 4,
+    name: 'Night 4',
+    durationMs: 270000,
+    spawns: [
+      { enemyId: 'bonnie', aggression: 10, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'chica', aggression: 8, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'freddy', aggression: 6, startHour: 1, startRoom: 'helipad' },
+    ],
+  },
+  {
+    id: 5,
+    name: 'Night 5',
+    durationMs: 300000,
+    spawns: [
+      { enemyId: 'bonnie', aggression: 13, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'chica', aggression: 12, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'freddy', aggression: 10, startHour: 0, startRoom: 'helipad' },
+    ],
+  },
+  {
+    id: 6,
+    name: 'Night 6',
+    durationMs: 300000,
+    spawns: [
+      { enemyId: 'bonnie', aggression: 18, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'chica', aggression: 17, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'freddy', aggression: 15, startHour: 0, startRoom: 'helipad' },
+    ],
+  },
+  {
+    id: 7,
+    name: 'Night 7 (Custom)',
+    durationMs: 300000,
+    spawns: [
+      { enemyId: 'bonnie', aggression: 20, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'chica', aggression: 20, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'freddy', aggression: 20, startHour: 0, startRoom: 'helipad' },
+    ],
+  },
+];
+
+/** @type {Record<number, Night>} */
+export const NIGHT_MAP = Object.fromEntries(NIGHTS.map(n => [n.id, n]));
+
+/** Default night for first play */
+export const DEFAULT_NIGHT_ID = 1;
+ 
+ 
+### data\rooms.js 
+------------------------------------------------------------ 
+/**
+ * Room definitions for the island facility.
+ * Each room has an ID, display name, and connections to other rooms.
+ * Layout inspired by Little St. James island.
+ */
+
+/**
+ * @typedef {Object} Room
+ * @property {string} id - Unique room identifier
+ * @property {string} name - Display name
+ * @property {string[]} connections - Adjacent room IDs
+ * @property {number} x - Render position X (0-1 relative) for camera map
+ * @property {number} y - Render position Y (0-1 relative) for camera map
+ * @property {boolean} isOffice - Whether this is the office room
+ * @property {boolean} isBlindSpot - Whether camera has limited visibility
+ */
+
+/** @type {Room[]} */
+export const ROOMS = [
+  { id: 'office', name: 'Security Office', connections: ['dock', 'generator'], x: 0.5, y: 0.88, isOffice: true, isBlindSpot: false },
+  { id: 'helipad', name: 'Helipad', connections: ['golden_temple'], x: 0.5, y: 0.05, isOffice: false, isBlindSpot: false },
+  { id: 'golden_temple', name: 'Golden Temple', connections: ['helipad', 'staff_quarters', 'greenhouse'], x: 0.5, y: 0.18, isOffice: false, isBlindSpot: false },
+  { id: 'staff_quarters', name: 'Staff Quarters', connections: ['golden_temple', 'guest_house'], x: 0.2, y: 0.32, isOffice: false, isBlindSpot: false },
+  { id: 'greenhouse', name: 'Greenhouse', connections: ['golden_temple', 'beach_house'], x: 0.8, y: 0.32, isOffice: false, isBlindSpot: false },
+  { id: 'guest_house', name: 'Guest House', connections: ['staff_quarters', 'dock'], x: 0.2, y: 0.52, isOffice: false, isBlindSpot: false },
+  { id: 'beach_house', name: 'Beach House', connections: ['greenhouse', 'generator'], x: 0.8, y: 0.52, isOffice: false, isBlindSpot: false },
+  { id: 'dock', name: 'Main Dock', connections: ['guest_house', 'office'], x: 0.2, y: 0.72, isOffice: false, isBlindSpot: true },
+  { id: 'generator', name: 'Generator', connections: ['beach_house', 'office'], x: 0.8, y: 0.72, isOffice: false, isBlindSpot: true },
+];
+
+/** @type {Record<string, Room>} - Quick lookup by ID */
+export const ROOM_MAP = Object.fromEntries(ROOMS.map(r => [r.id, r]));
+
+/** Camera IDs — same as room IDs for simplicity */
+export const CAMERA_IDS = ROOMS.filter(r => !r.isOffice).map(r => r.id);
+ 
+ 
+### engine\AssetLoader.js 
+------------------------------------------------------------ 
+/**
+ * AssetLoader — loads images and audio with graceful fallback.
+ * Never crashes on missing assets; uses placeholder rendering instead.
+ * Supports progress tracking for loading screens.
+ */
+export class AssetLoader {
+  /**
+   * @param {Object} options
+   * @param {string} [options.imagePrefix='assets/images/'] - Base path for images
+   * @param {string} [options.audioPrefix='assets/audio/'] - Base path for audio
+   */
+  constructor({ imagePrefix = 'assets/images/', audioPrefix = 'assets/audio/' } = {}) {
+    this._imagePrefix = imagePrefix;
+    this._audioPrefix = audioPrefix;
+
+    /** @type {Map<string, HTMLImageElement>} */
+    this._images = new Map();
+
+    /** @type {Map<string, HTMLAudioElement>} */
+    this._audio = new Map();
+
+    /** @type {number} */
+    this._totalToLoad = 0;
+
+    /** @type {number} */
+    this._loaded = 0;
+
+    /** @type {boolean} */
+    this._ready = false;
+  }
+
+  /** @returns {number} Load progress 0-1 */
+  get progress() {
+    if (this._totalToLoad === 0) return 1;
+    return this._loaded / this._totalToLoad;
+  }
+
+  /** @returns {boolean} */
+  get isReady() {
+    return this._ready;
+  }
+
+  /**
+   * Queue images for loading.
+   * @param {Object} manifest - { key: 'filename.png', ... }
+   */
+  queueImages(manifest) {
+    for (const [key, filename] of Object.entries(manifest)) {
+      this._images.set(key, { filename, loaded: false });
+      this._totalToLoad++;
+    }
+  }
+
+  /**
+   * Queue audio files for loading.
+   * @param {Object} manifest - { key: 'filename.ogg', ... }
+   */
+  queueAudio(manifest) {
+    for (const [key, filename] of Object.entries(manifest)) {
+      this._audio.set(key, { filename, loaded: false });
+      this._totalToLoad++;
+    }
+  }
+
+  /**
+   * Load all queued assets.
+   * @returns {Promise<void>}
+   */
+  async loadAll() {
+    const imagePromises = this._loadImages();
+    const audioPromises = this._loadAudio();
+
+    await Promise.all([...imagePromises, ...audioPromises]);
+    this._ready = true;
+  }
+
+  /**
+   * Get a loaded image by key.
+   * @param {string} key
+   * @returns {HTMLImageElement | null}
+   */
+  getImage(key) {
+    const entry = this._images.get(key);
+    if (!entry || !entry.loaded) return null;
+    return entry.element;
+  }
+
+  /**
+   * Get a loaded audio element by key.
+   * @param {string} key
+   * @returns {HTMLAudioElement | null}
+   */
+  getAudio(key) {
+    const entry = this._audio.get(key);
+    if (!entry || !entry.loaded) return null;
+    return entry.element;
+  }
+
+  /**
+   * Check if a specific asset is loaded.
+   * @param {string} key
+   * @returns {boolean}
+   */
+  isLoaded(key) {
+    return this._images.get(key)?.loaded || this._audio.get(key)?.loaded || false;
+  }
+
+  /** Load all queued images */
+  _loadImages() {
+    const promises = [];
+
+    for (const [key, entry] of this._images) {
+      promises.push(
+        this._loadImage(entry.filename).then((img) => {
+          entry.element = img;
+          entry.loaded = true;
+          this._loaded++;
+        }).catch(() => {
+          // Silently skip missing images — game uses placeholder rendering
+          entry.loaded = true;
+          this._loaded++;
+        })
+      );
+    }
+
+    return promises;
+  }
+
+  /** Load a single image by filename */
+  _loadImage(filename) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(`Failed to load image: ${filename}`));
+      img.src = this._imagePrefix + filename;
+    });
+  }
+
+  /** Load all queued audio */
+  _loadAudio() {
+    const promises = [];
+
+    for (const [key, entry] of this._audio) {
+      promises.push(
+        this._loadAudioFile(entry.filename).then((audio) => {
+          entry.element = audio;
+          entry.loaded = true;
+          this._loaded++;
+        }).catch(() => {
+          // Silently skip missing audio — never break game flow
+          entry.loaded = true;
+          this._loaded++;
+        })
+      );
+    }
+
+    return promises;
+  }
+
+  /** Load a single audio file */
+  _loadAudioFile(filename) {
+    return new Promise((resolve, reject) => {
+      const audio = new Audio();
+      audio.addEventListener('canplaythrough', () => resolve(audio), { once: true });
+      audio.addEventListener('error', () => reject(new Error(`Failed to load audio: ${filename}`)));
+      audio.src = this._audioPrefix + filename;
+      audio.load();
+    });
+  }
+}
+ 
+ 
+### engine\AudioManager.js 
+------------------------------------------------------------ 
+/**
+ * AudioManager — handles audio playback, volume control, and background loops.
+ * Uses Web Audio API with graceful fallback when assets are missing.
+ */
+export class AudioManager {
+  constructor() {
+    this._ctx = null;
+    this._masterGain = null;
+    this._sfxGain = null;
+    this._ambienceGain = null;
+    this._masterVolume = 0.7;
+    this._sfxVolume = 0.8;
+    this._ambienceVolume = 0.5;
+    this._muted = false;
+    this._activeLoops = new Map();
+    this._initialized = false;
+  }
+
+  /** Initialize Web Audio context (call on first user interaction) */
+  init() {
+    if (this._initialized) return;
+    try {
+      this._ctx = new (window.AudioContext || window.webkitAudioContext)();
+      this._masterGain = this._ctx.createGain();
+      this._masterGain.gain.value = this._masterVolume;
+      this._masterGain.connect(this._ctx.destination);
+
+      this._sfxGain = this._ctx.createGain();
+      this._sfxGain.gain.value = this._sfxVolume;
+      this._sfxGain.connect(this._masterGain);
+
+      this._ambienceGain = this._ctx.createGain();
+      this._ambienceGain.gain.value = this._ambienceVolume;
+      this._ambienceGain.connect(this._masterGain);
+
+      this._initialized = true;
+    } catch (e) {
+      console.warn('[AudioManager] Web Audio not available:', e);
+    }
+  }
+
+  /** Resume audio context (required after user gesture) */
+  resume() {
+    this._ctx?.resume();
+  }
+
+  /**
+   * Play a sound effect.
+   * @param {HTMLAudioElement|string} source - Audio element or asset key
+   * @returns {boolean} Whether playback started
+   */
+  playSFX(source) {
+    if (!this._initialized || this._muted) return false;
+    try {
+      if (source instanceof HTMLAudioElement) {
+        source.volume = this._sfxVolume;
+        source.currentTime = 0;
+        source.play().catch(() => {});
+        return true;
+      }
+    } catch (e) {
+      // Silently fail — audio is non-critical
+    }
+    return false;
+  }
+
+  /**
+   * Start a looping ambient sound.
+   * @param {string} id - Unique loop identifier
+   * @param {HTMLAudioElement} audio - Audio element
+   */
+  startLoop(id, audio) {
+    if (!this._initialized || this._muted) return;
+    try {
+      if (this._activeLoops.has(id)) return;
+      audio.loop = true;
+      audio.volume = this._ambienceVolume;
+      audio.play().catch(() => {});
+      this._activeLoops.set(id, audio);
+    } catch (e) {
+      // Silently fail
+    }
+  }
+
+  /** Stop a looping ambient sound by ID */
+  stopLoop(id) {
+    const audio = this._activeLoops.get(id);
+    if (audio) {
+      audio.pause();
+      audio.currentTime = 0;
+      this._activeLoops.delete(id);
+    }
+  }
+
+  /** Stop all active loops */
+  stopAllLoops() {
+    for (const id of this._activeLoops.keys()) {
+      this.stopLoop(id);
+    }
+  }
+
+  /** Set master volume (0-1) */
+  setMasterVolume(vol) {
+    this._masterVolume = Math.max(0, Math.min(1, vol));
+    if (this._masterGain) {
+      this._masterGain.gain.value = this._masterVolume;
+    }
+  }
+
+  /** Set SFX volume (0-1) */
+  setSFXVolume(vol) {
+    this._sfxVolume = Math.max(0, Math.min(1, vol));
+  }
+
+  /** Set ambience volume (0-1) */
+  setAmbienceVolume(vol) {
+    this._ambienceVolume = Math.max(0, Math.min(1, vol));
+    for (const audio of this._activeLoops.values()) {
+      audio.volume = this._ambienceVolume;
+    }
+  }
+
+  /** Toggle mute */
+  toggleMute() {
+    this._muted = !this._muted;
+    if (this._masterGain) {
+      this._masterGain.gain.value = this._muted ? 0 : this._masterVolume;
+    }
+  }
+
+  /** @returns {boolean} */
+  get isMuted() { return this._muted; }
+
+  /** @returns {number} */
+  get masterVolume() { return this._masterVolume; }
+}
+ 
+ 
+### engine\EventBus.js 
+------------------------------------------------------------ 
+/**
+ * Simple event bus for decoupled cross-system communication.
+ * Systems subscribe to events and emit them without direct references.
+ */
+export class EventBus {
+  constructor() {
+    /** @type {Map<string, Set<Function>>} */
+    this._listeners = new Map();
+  }
+
+  /**
+   * Register a listener for an event.
+   * @param {string} event - Event name
+   * @param {Function} callback - Handler function
+   */
+  on(event, callback) {
+    if (!this._listeners.has(event)) {
+      this._listeners.set(event, new Set());
+    }
+    this._listeners.get(event).add(callback);
+  }
+
+  /**
+   * Register a one-time listener.
+   * @param {string} event - Event name
+   * @param {Function} callback - Handler function
+   */
+  once(event, callback) {
+    const wrapper = (...args) => {
+      callback(...args);
+      this.off(event, wrapper);
+    };
+    this.on(event, wrapper);
+  }
+
+  /**
+   * Remove a listener.
+   * @param {string} event - Event name
+   * @param {Function} callback - Handler to remove
+   */
+  off(event, callback) {
+    this._listeners.get(event)?.delete(callback);
+  }
+
+  /**
+   * Emit an event to all registered listeners.
+   * @param {string} event - Event name
+   * @param {...*} args - Arguments passed to handlers
+   */
+  emit(event, ...args) {
+    const listeners = this._listeners.get(event);
+    if (!listeners) return;
+    for (const callback of listeners) {
+      callback(...args);
+    }
+  }
+
+  /** Remove all listeners for an event, or all events if none specified. */
+  clear(event) {
+    if (event) {
+      this._listeners.delete(event);
+    } else {
+      this._listeners.clear();
+    }
+  }
+}
+
+/** Singleton instance shared across the application */
+export const eventBus = new EventBus();
+ 
+ 
+### engine\Game.js 
+------------------------------------------------------------ 
+import { GameLoop } from './GameLoop.js';
+import { SceneManager } from './SceneManager.js';
+import { InputManager } from './InputManager.js';
+import { AssetLoader } from './AssetLoader.js';
+import { TARGET_FPS, START_SCENE } from '../config/gameConfig.js';
+
+/**
+ * Game — main orchestrator.
+ * Creates canvas context, initializes SceneManager, GameLoop,
+ * InputManager, and AssetLoader. Handles dynamic resize.
+ */
+export class Game {
+  /**
+   * @param {HTMLCanvasElement} canvas
+   */
+  constructor(canvas) {
+    this._canvas = canvas;
+    this._ctx = canvas.getContext('2d');
+
+    this._gameWidth = 1280;
+    this._gameHeight = 720;
+
+    // Core systems
+    this._sceneManager = new SceneManager();
+    this._inputManager = new InputManager({
+      canvas,
+      baseWidth: this._gameWidth,
+      baseHeight: this._gameHeight,
+    });
+    this._assetLoader = new AssetLoader();
+
+    // GameLoop handles fixed-step updates with rAF rendering
+    this._gameLoop = new GameLoop({
+      targetFPS: TARGET_FPS,
+      maxDeltaTime: 0.25,
+      onUpdate: (dt) => this._update(dt),
+      onRender: () => this._render(),
+    });
+
+    this._resize();
+    this._bindResize();
+  }
+
+  /** @returns {SceneManager} */
+  get sceneManager() {
+    return this._sceneManager;
+  }
+
+  /** @returns {InputManager} */
+  get inputManager() {
+    return this._inputManager;
+  }
+
+  /** @returns {AssetLoader} */
+  get assetLoader() {
+    return this._assetLoader;
+  }
+
+  /** @returns {number} */
+  get baseWidth() {
+    return this._gameWidth;
+  }
+
+  /** @returns {number} */
+  get baseHeight() {
+    return this._gameHeight;
+  }
+
+  /** @returns {HTMLCanvasElement} */
+  get canvas() {
+    return this._canvas;
+  }
+
+  /** Register a scene by name */
+  registerScene(name, scene) {
+    this._sceneManager.register(name, scene);
+  }
+
+  /** Start the game — switches to START_SCENE and begins the loop */
+  start() {
+    this._inputManager.start();
+    this._sceneManager.change(START_SCENE);
+    this._gameLoop.start();
+  }
+
+  /** Stop the game loop and input */
+  stop() {
+    this._gameLoop.stop();
+    this._inputManager.stop();
+  }
+
+  /** Handle window resize — dynamically adjusts game resolution */
+  _resize() {
+    const displayWidth = window.innerWidth;
+    const displayHeight = window.innerHeight;
+
+    if (displayWidth === 0 || displayHeight === 0) return;
+
+    this._canvas.width = displayWidth;
+    this._canvas.height = displayHeight;
+
+    this._gameWidth = displayWidth;
+    this._gameHeight = displayHeight;
+
+    this._inputManager.updateResolution(this._gameWidth, this._gameHeight);
+
+    console.log(`[Game] Dynamic resize: ${displayWidth}x${displayHeight}`);
+  }
+
+  /** Bind resize listener with debounce */
+  _bindResize() {
+    let timeoutId = null;
+    window.addEventListener('resize', () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => this._resize(), 50);
+    });
+  }
+
+  /** Per-frame update — delegates to active scene */
+  _update(dt) {
+    this._sceneManager.update(dt);
+  }
+
+  /** Per-frame render — delegates to active scene */
+  _render() {
+    const ctx = this._ctx;
+
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+
+    this._sceneManager.render(ctx, this._gameWidth, this._gameHeight);
+    ctx.restore();
+  }
+}
+ 
+ 
+### engine\GameLoop.js 
+------------------------------------------------------------ 
+/**
+ * GameLoop — requestAnimationFrame-based loop with delta time and accumulator.
+ * Decouples update from render for stable physics/logic regardless of frame rate.
+ * Supports dynamic start/stop and protects against large dt spikes.
+ */
+export class GameLoop {
+  /**
+   * @param {Object} options
+   * @param {number} options.targetFPS - Target frames per second
+   * @param {number} options.maxDeltaTime - Maximum allowed dt to prevent spiral of death
+   * @param {Function} options.onUpdate - Called with (dt) each frame
+   * @param {Function} options.onRender - Called each frame after update
+   */
+  constructor({ targetFPS = 60, maxDeltaTime = 0.25, onUpdate, onRender }) {
+    this._targetFPS = targetFPS;
+    this._frameInterval = 1 / targetFPS;
+    this._maxDeltaTime = maxDeltaTime;
+    this._onUpdate = onUpdate;
+    this._onRender = onRender;
+
+    this._running = false;
+    this._rafId = null;
+    this._lastTime = 0;
+    this._accumulator = 0;
+  }
+
+  /** Start the game loop */
+  start() {
+    if (this._running) return;
+    this._running = true;
+    this._lastTime = performance.now();
+    this._accumulator = 0;
+    this._rafId = requestAnimationFrame((t) => this._tick(t));
+  }
+
+  /** Stop the game loop */
+  stop() {
+    this._running = false;
+    if (this._rafId !== null) {
+      cancelAnimationFrame(this._rafId);
+      this._rafId = null;
+    }
+  }
+
+  /** @returns {boolean} */
+  get isRunning() {
+    return this._running;
+  }
+
+  /** Main tick — called by rAF */
+  _tick(timestamp) {
+    if (!this._running) return;
+
+    let frameTime = (timestamp - this._lastTime) / 1000;
+    this._lastTime = timestamp;
+
+    // Clamp dt to prevent spiral of death on tab switch / GC pause
+    if (frameTime > this._maxDeltaTime) {
+      frameTime = this._maxDeltaTime;
+    }
+
+    this._accumulator += frameTime;
+
+    // Fixed-step updates with accumulator
+    while (this._accumulator >= this._frameInterval) {
+      this._onUpdate(this._frameInterval);
+      this._accumulator -= this._frameInterval;
+    }
+
+    this._onRender();
+
+    this._rafId = requestAnimationFrame((t) => this._tick(t));
+  }
+}
+ 
+ 
+### engine\InputManager.js 
+------------------------------------------------------------ 
+/**
+ * InputManager — unified pointer/keyboard input handler.
+ * Converts all input (mouse, touch, keyboard) into normalized game events.
+ * Works with the dynamic game resolution.
+ */
+export class InputManager {
+  /**
+   * @param {Object} options
+   * @param {HTMLCanvasElement} options.canvas - Game canvas
+   * @param {number} options.baseWidth - Base game width
+   * @param {number} options.baseHeight - Base game height
+   */
+  constructor({ canvas, baseWidth, baseHeight }) {
+    this._canvas = canvas;
+    this._gameWidth = baseWidth;
+    this._gameHeight = baseHeight;
+
+    /** @type {Map<string, Set<Function>>} */
+    this._listeners = new Map();
+
+    /** @type {{x: number, y: number} | null} */
+    this._pointerPos = null;
+
+    /** @type {Set<string>} */
+    this._keysDown = new Set();
+
+    this._boundPointerDown = this._onPointerDown.bind(this);
+    this._boundPointerUp = this._onPointerUp.bind(this);
+    this._boundPointerMove = this._onPointerMove.bind(this);
+    this._boundKeyDown = this._onKeyDown.bind(this);
+    this._boundKeyUp = this._onKeyUp.bind(this);
+
+    this._active = false;
+  }
+
+  /**
+   * Update resolution on window resize.
+   * @param {number} width
+   * @param {number} height
+   */
+  updateResolution(width, height) {
+    this._gameWidth = width;
+    this._gameHeight = height;
+  }
+
+  /** @returns {number} */
+  get gameWidth() {
+    return this._gameWidth;
+  }
+
+  /** @returns {number} */
+  get gameHeight() {
+    return this._gameHeight;
+  }
+
+  /** Start listening to input events */
+  start() {
+    if (this._active) return;
+    this._active = true;
+
+    // Pointer events cover both mouse and touch
+    this._canvas.addEventListener('pointerdown', this._boundPointerDown);
+    this._canvas.addEventListener('pointerup', this._boundPointerUp);
+    this._canvas.addEventListener('pointermove', this._boundPointerMove);
+    this._canvas.addEventListener('pointercancel', this._boundPointerUp);
+
+    // Keyboard
+    window.addEventListener('keydown', this._boundKeyDown);
+    window.addEventListener('keyup', this._boundKeyUp);
+  }
+
+  /** Stop listening to input events */
+  stop() {
+    if (!this._active) return;
+    this._active = false;
+
+    this._canvas.removeEventListener('pointerdown', this._boundPointerDown);
+    this._canvas.removeEventListener('pointerup', this._boundPointerUp);
+    this._canvas.removeEventListener('pointermove', this._boundPointerMove);
+    this._canvas.removeEventListener('pointercancel', this._boundPointerUp);
+
+    window.removeEventListener('keydown', this._boundKeyDown);
+    window.removeEventListener('keyup', this._boundKeyUp);
+  }
+
+  /**
+   * Register an input event listener.
+   * Events: 'pointerdown', 'pointerup', 'pointermove', 'keydown', 'keyup'
+   * @param {string} event
+   * @param {Function} callback
+   */
+  on(event, callback) {
+    if (!this._listeners.has(event)) {
+      this._listeners.set(event, new Set());
+    }
+    this._listeners.get(event).add(callback);
+  }
+
+  /**
+   * Remove an input event listener.
+   * @param {string} event
+   * @param {Function} callback
+   */
+  off(event, callback) {
+    this._listeners.get(event)?.delete(callback);
+  }
+
+  /**
+   * Convenience: register pointerdown listener.
+   * @param {Function} callback - receives {x, y} in game coords
+   */
+  onPointerDown(callback) {
+    this.on('pointerdown', (x, y) => callback({ x, y }));
+  }
+
+  /** Remove all listeners for all events */
+  clearAll() {
+    this._listeners.clear();
+  }
+
+  /** @returns {boolean} */
+  isKeyDown(key) {
+    return this._keysDown.has(key.toLowerCase());
+  }
+
+  /** @returns {Set<string>} */
+  get keysDown() {
+    return new Set(this._keysDown);
+  }
+
+  /** @returns {{x: number, y: number} | null} Current pointer in game coords */
+  get pointerPos() {
+    return this._pointerPos;
+  }
+
+  /**
+   * Check if a rectangle contains the current pointer position.
+   * @param {number} x
+   * @param {number} y
+   * @param {number} w
+   * @param {number} h
+   * @returns {boolean}
+   */
+  isPointerInRect(x, y, w, h) {
+    if (!this._pointerPos) return false;
+    return (
+      this._pointerPos.x >= x &&
+      this._pointerPos.x <= x + w &&
+      this._pointerPos.y >= y &&
+      this._pointerPos.y <= y + h
+    );
+  }
+
+  /** Convert screen coordinates to game coordinates */
+  _screenToGame(clientX, clientY) {
+    const rect = this._canvas.getBoundingClientRect();
+    const canvasX = clientX - rect.left;
+    const canvasY = clientY - rect.top;
+    return {
+      x: canvasX,
+      y: canvasY,
+    };
+  }
+
+  /** Emit event to registered listeners */
+  _emit(event, ...args) {
+    const listeners = this._listeners.get(event);
+    if (!listeners) return;
+    for (const callback of listeners) {
+      callback(...args);
+    }
+  }
+
+  _onPointerDown(e) {
+    e.preventDefault();
+    const pos = this._screenToGame(e.clientX, e.clientY);
+    this._pointerPos = pos;
+    this._emit('pointerdown', pos.x, pos.y, e);
+  }
+
+  _onPointerUp(e) {
+    e.preventDefault();
+    const pos = this._screenToGame(e.clientX, e.clientY);
+    this._pointerPos = null;
+    this._emit('pointerup', pos.x, pos.y, e);
+  }
+
+  _onPointerMove(e) {
+    const pos = this._screenToGame(e.clientX, e.clientY);
+    this._pointerPos = pos;
+    this._emit('pointermove', pos.x, pos.y, e);
+  }
+
+  _onKeyDown(e) {
+    // Prevent default for game keys only
+    if (['Enter', ' ', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      e.preventDefault();
+    }
+    const key = e.key.toLowerCase();
+    if (!this._keysDown.has(key)) {
+      this._keysDown.add(key);
+      this._emit('keydown', key, e);
+    }
+  }
+
+  _onKeyUp(e) {
+    const key = e.key.toLowerCase();
+    this._keysDown.delete(key);
+    this._emit('keyup', key, e);
+  }
+}
+ 
+ 
+### engine\Renderer.js 
+------------------------------------------------------------ 
+/**
+ * Renderer — shared visual effect utilities.
+ * All effects work with base coordinates and are resolution-independent.
+ */
+export class Renderer {
+  /**
+   * Draw scanline overlay.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} w
+   * @param {number} h
+   * @param {number} [opacity=0.04]
+   * @param {number} [spacing=3]
+   */
+  static scanlines(ctx, w, h, opacity = 0.04, spacing = 3) {
+    ctx.fillStyle = `rgba(0, 0, 0, ${opacity})`;
+    for (let y = 0; y < h; y += spacing) {
+      ctx.fillRect(0, y, w, 1);
+    }
+  }
+
+  /**
+   * Draw radial vignette.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} w
+   * @param {number} h
+   * @param {string} [color='rgba(0,0,0,0.6)']
+   */
+  static vignette(ctx, w, h, color = 'rgba(0, 0, 0, 0.6)') {
+    const gradient = ctx.createRadialGradient(w / 2, h / 2, h * 0.25, w / 2, h / 2, w * 0.7);
+    gradient.addColorStop(0, 'transparent');
+    gradient.addColorStop(1, color);
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  /**
+   * Draw static/noise effect (lightweight — random rectangles, not per-pixel).
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} w
+   * @param {number} h
+   * @param {number} [intensity=0.08]
+   * @param {number} [seed=0] - Optional seed for deterministic noise
+   */
+  static noise(ctx, w, h, intensity = 0.08, seed = 0) {
+    const count = Math.floor(w * h * intensity / 100);
+    ctx.fillStyle = 'rgba(200, 200, 200, 0.05)';
+
+    let s = seed || Date.now();
+    const rand = () => {
+      s = (s * 16807 + 0) % 2147483647;
+      return s / 2147483647;
+    };
+
+    for (let i = 0; i < count; i++) {
+      const x = rand() * w;
+      const y = rand() * h;
+      const sw = rand() * 4 + 1;
+      const sh = 1;
+      ctx.fillRect(x, y, sw, sh);
+    }
+  }
+
+  /**
+   * Draw a placeholder rectangle with label (for missing assets).
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {string} label
+   * @param {number} x
+   * @param {number} y
+   * @param {number} w
+   * @param {number} h
+   */
+  static placeholder(ctx, label, x, y, w, h) {
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, y, w, h);
+
+    ctx.fillStyle = '#555';
+    ctx.font = '12px Courier New';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, x + w / 2, y + h / 2);
+  }
+
+  /**
+   * Draw a filled rectangle with rounded corners.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} x
+   * @param {number} y
+   * @param {number} w
+   * @param {number} h
+   * @param {number} radius
+   */
+  static roundRect(ctx, x, y, w, h, radius) {
+    const r = Math.min(radius, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+}
+ 
+ 
+### engine\SceneManager.js 
+------------------------------------------------------------ 
+/**
+ * SceneManager — registers, switches, and updates scenes.
+ * Scenes have enter/exit lifecycle methods.
+ * Supports push/pop for overlays (pause menu) that don't destroy the underlying scene.
+ */
+export class SceneManager {
+  constructor() {
+    /** @type {Map<string, Object>} */
+    this._scenes = new Map();
+    /** @type {Object|null} */
+    this._current = null;
+    /** @type {string|null} */
+    this._currentName = null;
+    /** @type {Array<{name: string, scene: Object}>} */
+    this._stack = [];
+  }
+
+  /**
+   * Register a scene.
+   * @param {string} name
+   * @param {Object} scene - Must have enter(), exit(), update(dt), render(ctx, w, h)
+   */
+  register(name, scene) {
+    this._scenes.set(name, scene);
+  }
+
+  /**
+   * Switch to a registered scene (replaces current).
+   * @param {string} name
+   */
+  change(name) {
+    const scene = this._scenes.get(name);
+    if (!scene) {
+      console.error(`[SceneManager] Scene not found: ${name}`);
+      return;
+    }
+
+    if (this._current) {
+      this._current.exit?.();
+    }
+
+    this._current = scene;
+    this._currentName = name;
+    this._current.enter?.();
+  }
+
+  /**
+   * Push a scene on top of the stack (overlay — underlying scene stays alive).
+   * @param {string} name
+   */
+  push(name) {
+    const scene = this._scenes.get(name);
+    if (!scene) {
+      console.error(`[SceneManager] Scene not found: ${name}`);
+      return;
+    }
+
+    if (this._current) {
+      this._stack.push({ name: this._currentName, scene: this._current });
+    }
+
+    this._current = scene;
+    this._currentName = name;
+    this._current.enter?.();
+  }
+
+  /**
+   * Pop the top scene off the stack (returns to the previous scene).
+   */
+  pop() {
+    if (!this._current) return;
+
+    this._current.exit?.();
+
+    if (this._stack.length === 0) {
+      this._current = null;
+      this._currentName = null;
+      return;
+    }
+
+    const prev = this._stack.pop();
+    this._current = prev.scene;
+    this._currentName = prev.name;
+  }
+
+  /**
+   * Update the active scene.
+   * @param {number} dt
+   */
+  update(dt) {
+    this._current?.update?.(dt);
+  }
+
+  /**
+   * Render the active scene.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} width
+   * @param {number} height
+   */
+  render(ctx, width, height) {
+    this._current?.render?.(ctx, width, height);
+  }
+
+  /** @returns {string|null} */
+  get currentName() {
+    return this._currentName;
+  }
+
+  /** @returns {Object|null} */
+  get current() {
+    return this._current;
+  }
+}
+ 
+ 
+### entities\Enemy.js 
+------------------------------------------------------------ 
+/**
+ * Enemy — enemy entity with position, state, and rendering.
+ */
+export class Enemy {
+  /**
+   * @param {Object} deps
+   * @param {string} deps.id - Enemy ID
+   * @param {string} deps.name - Display name
+   * @param {string} deps.color - Display color
+   * @param {string} deps.startRoom - Starting room ID
+   */
+  constructor({ id, name, color, startRoom }) {
+    this._id = id;
+    this._name = name;
+    this._color = color;
+    this._currentRoom = startRoom;
+    this._previousRoom = null;
+    this._isMoving = false;
+    this._moveTimer = 0;
+    this._aggression = 0;
+    this._isDefeated = false; // defeated by closing door
+  }
+
+  /** Reset enemy to start room */
+  reset(startRoom) {
+    this._currentRoom = startRoom;
+    this._previousRoom = null;
+    this._isMoving = false;
+    this._moveTimer = 0;
+    this._isDefeated = false;
+  }
+
+  /**
+   * Set aggression level (0-20).
+   * @param {number} level
+   */
+  setAggression(level) {
+    this._aggression = Math.max(0, Math.min(20, level));
+  }
+
+  /**
+   * Move enemy to a new room.
+   * @param {string} roomId
+   */
+  moveTo(roomId) {
+    this._previousRoom = this._currentRoom;
+    this._currentRoom = roomId;
+    this._isMoving = true;
+  }
+
+  /** Mark movement as complete */
+  completeMove() {
+    this._isMoving = false;
+  }
+
+  /** Defeat enemy (door blocked attack) */
+  defeat() {
+    this._isDefeated = true;
+  }
+
+  /** @returns {string} */
+  get id() { return this._id; }
+
+  /** @returns {string} */
+  get name() { return this._name; }
+
+  /** @returns {string} */
+  get color() { return this._color; }
+
+  /** @returns {string} */
+  get currentRoom() { return this._currentRoom; }
+
+  /** @returns {string|null} */
+  get previousRoom() { return this._previousRoom; }
+
+  /** @returns {boolean} */
+  get isMoving() { return this._isMoving; }
+
+  /** @returns {number} */
+  get aggression() { return this._aggression; }
+
+  /** @returns {boolean} */
+  get isDefeated() { return this._isDefeated; }
+
+  /** @returns {number} */
+  get moveTimer() { return this._moveTimer; }
+
+  /** Increment move timer */
+  tickMoveTimer(dt) {
+    this._moveTimer += dt;
+  }
+
+  /** Reset move timer */
+  resetMoveTimer() {
+    this._moveTimer = 0;
+  }
+
+  /** @returns {boolean} Whether enemy is at office door */
+  get isAtOfficeDoor() {
+    return this._currentRoom === 'dock' || this._currentRoom === 'generator';
+  }
+
+  /**
+   * Render enemy placeholder.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} x
+   * @param {number} y
+   * @param {number} size
+   */
+  render(ctx, x, y, size = 60) {
+    ctx.fillStyle = this._color;
+    ctx.beginPath();
+    ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 12px Courier New';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(this._name, x, y);
+  }
+}
+ 
+ 
+### scenes\BootScene.js 
+------------------------------------------------------------ 
+import { SCENES } from '../config/gameConfig.js';
+
+/**
+ * BootScene — initial loading scene.
+ * Shows a loading bar, simulates asset preparation,
+ * then automatically transitions to TitleScene.
+ */
+export class BootScene {
+  /**
+   * @param {Object} deps
+   * @param {Function} deps.onSceneChange - Callback to switch scenes
+   */
+  constructor({ onSceneChange }) {
+    this._onSceneChange = onSceneChange;
+    this._loadDuration = 2000; // ms
+    this._elapsed = 0;
+    this._done = false;
+  }
+
+  /** Called when scene becomes active */
+  enter() {
+    this._elapsed = 0;
+    this._done = false;
+  }
+
+  /** Called when scene is deactivated */
+  exit() {
+    this._elapsed = 0;
+    this._done = false;
+  }
+
+  /**
+   * Update loading progress.
+   * @param {number} dt - Delta time in seconds
+   */
+  update(dt) {
+    if (this._done) return;
+
+    this._elapsed += dt * 1000;
+
+    if (this._elapsed >= this._loadDuration) {
+      this._done = true;
+      this._onSceneChange(SCENES.TITLE);
+    }
+  }
+
+  /**
+   * Render loading screen.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} w - Current game width
+   * @param {number} h - Current game height
+   */
+  render(ctx, w, h) {
+    // Background
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, w, h);
+
+    // Subtle vignette
+    const gradient = ctx.createRadialGradient(w / 2, h / 2, h * 0.3, w / 2, h / 2, w * 0.7);
+    gradient.addColorStop(0, 'transparent');
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0.6)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+
+    // Title
+    const fontSize = Math.min(36, h * 0.05);
+    ctx.fillStyle = '#8b0000';
+    ctx.font = `bold ${fontSize}px Courier New`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('ISLAND NIGHT WATCH', w / 2, h * 0.35);
+
+    // Loading label
+    const fontSizeSmall = Math.min(16, h * 0.022);
+    ctx.fillStyle = '#666';
+    ctx.font = `${fontSizeSmall}px Courier New`;
+    ctx.fillText('LOADING...', w / 2, h * 0.48);
+
+    // Progress bar background
+    const barWidth = w * 0.4;
+    const barHeight = Math.max(6, h * 0.008);
+    const barX = (w - barWidth) / 2;
+    const barY = h * 0.55;
+
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(barX, barY, barWidth, barHeight);
+
+    // Progress bar fill
+    const progress = Math.min(this._elapsed / this._loadDuration, 1);
+    ctx.fillStyle = '#8b0000';
+    ctx.fillRect(barX, barY, barWidth * progress, barHeight);
+
+    // Progress percentage
+    const fontSizeTiny = Math.max(12, h * 0.017);
+    ctx.fillStyle = '#444';
+    ctx.font = `${fontSizeTiny}px Courier New`;
+    ctx.fillText(`${Math.floor(progress * 100)}%`, w / 2, barY + barHeight + 20);
+
+    // Scanline effect
+    this._drawScanlines(ctx, w, h);
+  }
+
+  /** Draw subtle scanline overlay for atmosphere */
+  _drawScanlines(ctx, w, h) {
+    const spacing = Math.max(3, h * 0.004);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
+    for (let y = 0; y < h; y += spacing) {
+      ctx.fillRect(0, y, w, 1);
+    }
+  }
+}
+ 
+ 
+### scenes\GameOverScene.js 
+------------------------------------------------------------ 
+/**
+ * GameOverScene — game over screen with jumpscare aftermath.
+ */
+import { SCENES, COLORS, UI } from '../config/gameConfig.js';
+import { Renderer } from '../engine/Renderer.js';
+import { eventBus } from '../engine/EventBus.js';
+import { DEFAULT_NIGHT_ID } from '../data/nights.js';
+
+export class GameOverScene {
+  constructor({ baseWidth, baseHeight, onSceneChange, inputManager }) {
+    this._onSceneChange = onSceneChange;
+    this._inputManager = inputManager;
+    this._elapsed = 0;
+    this._canInteract = false;
+    this._retryNightId = DEFAULT_NIGHT_ID;
+
+    eventBus.on('game:over', ({ nightId }) => {
+      this._retryNightId = nightId;
+    });
+  }
+
+  enter() {
+    this._elapsed = 0;
+    this._canInteract = false;
+    this._bindInput();
+  }
+
+  exit() {
+    this._inputManager.clearAll();
+  }
+
+  update(dt) {
+    this._elapsed += dt * 1000;
+    if (this._elapsed > 2000) {
+      this._canInteract = true;
+    }
+  }
+
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} w - Current game width
+   * @param {number} h - Current game height
+   */
+  render(ctx, w, h) {
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, w, h);
+
+    Renderer.noise(ctx, w, h, 0.15);
+
+    const alpha = Math.min(1, this._elapsed / 1000);
+    ctx.globalAlpha = alpha;
+
+    const fontSizeTitle = Math.min(UI.FONT_TITLE, h * 0.067);
+    ctx.fillStyle = COLORS.ACCENT_RED;
+    ctx.font = `bold ${fontSizeTitle}px Courier New`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('GAME OVER', w / 2, h * 0.35);
+
+    const fontSizeSub = Math.min(UI.FONT_SUBTITLE, h * 0.025);
+    ctx.fillStyle = COLORS.TEXT_SECONDARY;
+    ctx.font = `${fontSizeSub}px Courier New`;
+    ctx.fillText('The night was not kind to you.', w / 2, h * 0.48);
+
+    if (this._canInteract) {
+      const pulse = 0.5 + Math.sin(Date.now() * 0.003) * 0.5;
+      ctx.globalAlpha = 0.5 + pulse * 0.5;
+      const fontSizeBody = Math.min(UI.FONT_BODY, h * 0.019);
+      ctx.fillStyle = COLORS.TEXT_PRIMARY;
+      ctx.font = `${fontSizeBody}px Courier New`;
+      ctx.fillText('Click to try again', w / 2, h * 0.65);
+    }
+
+    ctx.globalAlpha = 1;
+
+    Renderer.vignette(ctx, w, h, 'rgba(0, 0, 0, 0.5)');
+    Renderer.scanlines(ctx, w, h);
+  }
+
+  _bindInput() {
+    this._inputManager.onPointerDown(() => {
+      if (this._canInteract) {
+        eventBus.emit('game:night-change', { nightId: this._retryNightId });
+        this._onSceneChange(SCENES.NIGHT);
+      }
+    });
+  }
+}
+ 
+ 
+### scenes\NightScene.js 
+------------------------------------------------------------ 
+/**
+ * NightScene — main gameplay scene.
+ * Manages office view, camera system, all game systems integration.
+ */
+import { SCENES, COLORS, UI } from '../config/gameConfig.js';
+import { PowerSystem } from '../systems/PowerSystem.js';
+import { CameraSystem } from '../systems/CameraSystem.js';
+import { ClockSystem } from '../systems/ClockSystem.js';
+import { OfficeSystem } from '../systems/OfficeSystem.js';
+import { JumpscareSystem } from '../systems/JumpscareSystem.js';
+import { HUDSystem } from '../systems/HUDSystem.js';
+import { Enemy } from '../entities/Enemy.js';
+import { EnemyAI } from '../ai/EnemyAI.js';
+import { ENEMY_MAP } from '../data/enemies.js';
+import { ROOM_MAP } from '../data/rooms.js';
+import { NIGHT_MAP, DEFAULT_NIGHT_ID } from '../data/nights.js';
+import { eventBus } from '../engine/EventBus.js';
+import { Renderer } from '../engine/Renderer.js';
+
+export class NightScene {
+  /**
+   * @param {Object} deps
+   * @param {Function} deps.onSceneChange
+   * @param {Function} [deps.onPause]
+   * @param {Object} deps.inputManager
+   * @param {Object} [deps.audioManager]
+   * @param {number} [deps.nightId]
+   */
+  constructor({ onSceneChange, onPause, inputManager, audioManager, nightId }) {
+    this._onSceneChange = onSceneChange;
+    this._onPause = onPause;
+    this._inputManager = inputManager;
+    this._audioManager = audioManager;
+
+    this._powerSystem = new PowerSystem({ eventBus });
+    this._cameraSystem = new CameraSystem({ eventBus });
+    this._clockSystem = new ClockSystem({ eventBus });
+    this._officeSystem = new OfficeSystem({ eventBus });
+    this._jumpscareSystem = new JumpscareSystem({ eventBus });
+    this._hudSystem = new HUDSystem({ eventBus });
+    this._enemyAI = new EnemyAI({ eventBus });
+
+    this._enemies = [];
+    this._enemyStartHours = new Map();
+
+    this._nightId = nightId || DEFAULT_NIGHT_ID;
+    this._nightConfig = NIGHT_MAP[this._nightId] || NIGHT_MAP[DEFAULT_NIGHT_ID];
+
+    this._paused = false;
+    this._gameOver = false;
+    this._victory = false;
+    this._powerOut = false;
+
+    this._officePanX = 0;
+    this._officePanTarget = 0;
+    this._panMaxOffset = 120;
+    this._isPanning = false;
+    this._panStartX = 0;
+    this._panStartOffset = 0;
+  }
+
+  enter() {
+    this._paused = false;
+    this._gameOver = false;
+    this._victory = false;
+    this._powerOut = false;
+    this._officePanX = 0;
+    this._officePanTarget = 0;
+    this._isPanning = false;
+
+    this._powerSystem.reset();
+    this._clockSystem.reset(this._nightConfig.durationMs);
+    this._officeSystem.reset();
+    this._cameraSystem.close();
+
+    this._enemies = [];
+    this._enemyStartHours = new Map();
+
+    for (const spawn of this._nightConfig.spawns) {
+      const def = ENEMY_MAP[spawn.enemyId];
+      if (!def) continue;
+
+      const enemy = new Enemy({
+        id: def.id,
+        name: def.name,
+        color: def.color,
+        startRoom: spawn.startRoom,
+      });
+      enemy.setAggression(spawn.aggression);
+      this._enemies.push(enemy);
+      this._enemyStartHours.set(enemy.id, spawn.startHour);
+    }
+
+    this._bindInput();
+    this._updateHUD();
+  }
+
+  /** Called when returning to this scene (e.g. after pause pop). */
+  resume() {
+    this._paused = false;
+  }
+
+  exit() {
+    this._inputManager.clearAll();
+  }
+
+  /**
+   * @param {number} dt
+   */
+  update(dt) {
+    if (this._paused || this._gameOver || this._victory) return;
+
+    const dtMs = dt * 1000;
+
+    const panSpeed = 8;
+    const panDiff = this._officePanTarget - this._officePanX;
+    if (Math.abs(panDiff) > 0.5) {
+      this._officePanX += panDiff * panSpeed * dt;
+    } else {
+      this._officePanX = this._officePanTarget;
+    }
+
+    this._clockSystem.update(dtMs);
+    if (this._clockSystem.isComplete) {
+      this._victory = true;
+      this._onVictory();
+      return;
+    }
+
+    this._powerSystem.setActiveDoors(this._officeSystem.activeDoors);
+    this._powerSystem.setActiveLights(this._officeSystem.activeLights);
+    this._powerSystem.setCameraActive(this._cameraSystem.isActive);
+    this._powerSystem.update(dt);
+    if (this._powerSystem.isDepleted && !this._powerOut) {
+      this._onPowerOut();
+    }
+
+    if (!this._powerOut && !this._jumpscareSystem.isActive) {
+      const currentHour = this._clockSystem.currentHour;
+      for (const enemy of this._enemies) {
+        if (enemy.isDefeated) continue;
+        const startHour = this._enemyStartHours.get(enemy.id) ?? 0;
+        if (currentHour < startHour) continue;
+
+        const def = ENEMY_MAP[enemy.id];
+        if (!def) continue;
+
+        const result = this._enemyAI.update(enemy, def, dtMs, this._officeSystem);
+        if (result === 'attacked') {
+          enemy.defeat();
+          this._onJumpscare(enemy);
+          return;
+        }
+      }
+    }
+
+    if (this._jumpscareSystem.isActive) {
+      this._jumpscareSystem.update(dtMs);
+    }
+
+    this._updateHUD();
+  }
+
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} w - Current game width
+   * @param {number} h - Current game height
+   */
+  render(ctx, w, h) {
+    if (this._jumpscareSystem.isActive) {
+      this._jumpscareSystem.render(ctx, w, h);
+      return;
+    }
+
+    if (this._cameraSystem.isActive) {
+      this._renderCameraView(ctx, w, h);
+    } else if (this._powerOut) {
+      this._renderPowerOut(ctx, w, h);
+    } else {
+      this._renderOffice(ctx, w, h);
+    }
+
+    this._hudSystem.render(ctx, w, h);
+
+    if (this._cameraSystem.isActive) {
+      this._hudSystem.renderCameraMap(ctx, w, h, ROOM_MAP, this._cameraSystem.currentCamera, this._enemies);
+    }
+
+    Renderer.vignette(ctx, w, h, 'rgba(0, 0, 0, 0.4)');
+    Renderer.scanlines(ctx, w, h);
+
+    this._renderDoorButtons(ctx, w, h);
+    this._renderLightButtons(ctx, w, h);
+  }
+    this._enemyStartHours = new Map();
+
+    for (const spawn of this._nightConfig.spawns) {
+      const def = ENEMY_MAP[spawn.enemyId];
+      if (!def) continue;
+
+      const enemy = new Enemy({
+        id: def.id,
+        name: def.name,
+        color: def.color,
+        startRoom: spawn.startRoom,
+      });
+      enemy.setAggression(spawn.aggression);
+      this._enemies.push(enemy);
+      this._enemyStartHours.set(enemy.id, spawn.startHour);
+    }
+
+    this._bindInput();
+    this._updateHUD();
+  }
+
+  /** Called when returning to this scene (e.g. after pause pop). */
+  resume() {
+    this._paused = false;
+  }
+
+  exit() {
+    this._inputManager.clearAll();
+  }
+
+  /**
+   * @param {number} dt
+   */
+  update(dt) {
+    if (this._paused || this._gameOver || this._victory) return;
+
+    const dtMs = dt * 1000;
+
+    const panSpeed = 8;
+    const panDiff = this._officePanTarget - this._officePanX;
+    if (Math.abs(panDiff) > 0.5) {
+      this._officePanX += panDiff * panSpeed * dt;
+    } else {
+      this._officePanX = this._officePanTarget;
+    }
+
+    this._clockSystem.update(dtMs);
+    if (this._clockSystem.isComplete) {
+      this._victory = true;
+      this._onVictory();
+      return;
+    }
+
+    this._powerSystem.setActiveDoors(this._officeSystem.activeDoors);
+    this._powerSystem.setActiveLights(this._officeSystem.activeLights);
+    this._powerSystem.setCameraActive(this._cameraSystem.isActive);
+    this._powerSystem.update(dt);
+    if (this._powerSystem.isDepleted && !this._powerOut) {
+      this._onPowerOut();
+    }
+
+    if (!this._powerOut && !this._jumpscareSystem.isActive) {
+      const currentHour = this._clockSystem.currentHour;
+      for (const enemy of this._enemies) {
+        if (enemy.isDefeated) continue;
+        const startHour = this._enemyStartHours.get(enemy.id) ?? 0;
+        if (currentHour < startHour) continue;
+
+        const def = ENEMY_MAP[enemy.id];
+        if (!def) continue;
+
+        const result = this._enemyAI.update(enemy, def, dtMs, this._officeSystem);
+        if (result === 'attacked') {
+          enemy.defeat();
+          this._onJumpscare(enemy);
+          return;
+        }
+      }
+    }
+
+    if (this._jumpscareSystem.isActive) {
+      this._jumpscareSystem.update(dtMs);
+    }
+
+    this._updateHUD();
+  }
+
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} w - Current game width
+   * @param {number} h - Current game height
+   */
+  render(ctx, w, h) {
+    if (this._jumpscareSystem.isActive) {
+      this._jumpscareSystem.render(ctx, w, h);
+      return;
+    }
+
+    if (this._cameraSystem.isActive) {
+      this._renderCameraView(ctx, w, h);
+    } else if (this._powerOut) {
+      this._renderPowerOut(ctx, w, h);
+    } else {
+      this._renderOffice(ctx, w, h);
+    }
+
+    this._hudSystem.render(ctx, w, h);
+
+    if (this._cameraSystem.isActive) {
+      this._hudSystem.renderCameraMap(ctx, w, h, ROOM_MAP, this._cameraSystem.currentCamera, this._enemies);
+    }
+
+    Renderer.vignette(ctx, w, h, 'rgba(0, 0, 0, 0.4)');
+    Renderer.scanlines(ctx, w, h);
+
+    this._renderDoorButtons(ctx, w, h);
+    this._renderLightButtons(ctx, w, h);
+  }
+
+  _renderOffice(ctx, w, h) {
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(0, 0, w, h);
+
+    const panX = this._officePanX;
+    ctx.save();
+    ctx.translate(-panX, 0);
+
+    const officeW = w * 1.3;
+    const officeX = (w - officeW) / 2;
+
+    ctx.fillStyle = '#222';
+    ctx.fillRect(officeX + w * 0.05, h * 0.08, officeW * 0.9, h * 0.72);
+
+    ctx.fillStyle = '#333';
+    ctx.fillRect(officeX + w * 0.3, h * 0.5, officeW * 0.4, h * 0.15);
+
+    ctx.fillStyle = '#444';
+    ctx.beginPath();
+    ctx.arc(officeX + w * 0.5, h * 0.45, 20, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#555';
+    ctx.fillRect(officeX + w * 0.35, h * 0.48, 8, 12);
+    ctx.fillRect(officeX + w * 0.55, h * 0.47, 6, 14);
+
+    ctx.fillStyle = '#666';
+    ctx.beginPath();
+    ctx.arc(officeX + w * 0.65, h * 0.42, 15, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#777';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(officeX + w * 0.65, h * 0.42);
+    ctx.lineTo(officeX + w * 0.65, h * 0.3);
+    ctx.stroke();
+
+    ctx.fillStyle = '#111';
+    ctx.fillRect(officeX + w * 0.02, h * 0.15, w * 0.08, h * 0.55);
+    ctx.fillRect(officeX + w * 0.9, h * 0.15, w * 0.08, h * 0.55);
+
+    ctx.strokeStyle = '#444';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(officeX + w * 0.02, h * 0.15, w * 0.08, h * 0.55);
+    ctx.strokeRect(officeX + w * 0.9, h * 0.15, w * 0.08, h * 0.55);
+
+    this._renderDoorState(ctx, 'left', officeX, w, h);
+    this._renderDoorState(ctx, 'right', officeX, w, h);
+
+    if (this._officeSystem.leftLightOn) {
+      this._renderLightEffect(ctx, 'left', officeX, w, h);
+      this._renderEnemyAtDoor(ctx, 'left', officeX, w, h);
+    }
+    if (this._officeSystem.rightLightOn) {
+      this._renderLightEffect(ctx, 'right', officeX, w, h);
+      this._renderEnemyAtDoor(ctx, 'right', officeX, w, h);
+    }
+
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+    ctx.font = '10px Courier New';
+    ctx.textAlign = 'center';
+    ctx.fillText('◄ ►', w / 2, h - 8);
+
+    ctx.restore();
+  }
+
+  _renderDoorState(ctx, side, officeX, w, h) {
+    const x = side === 'left' ? officeX + w * 0.07 : officeX + w * 0.92;
+    const y = h * 0.2;
+    const doorW = w * 0.06;
+    const doorH = h * 0.5;
+
+    const isOpen = side === 'left' ? this._officeSystem.leftDoorOpen : this._officeSystem.rightDoorOpen;
+
+    ctx.fillStyle = isOpen ? '#111' : '#333';
+    ctx.fillRect(x, y, doorW, doorH);
+
+    ctx.strokeStyle = isOpen ? '#444' : '#666';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, doorW, doorH);
+  }
+
+  _renderLightEffect(ctx, side, officeX, w, h) {
+    const x = side === 'left' ? officeX + w * 0.15 : officeX + w * 0.75;
+    const gradient = ctx.createRadialGradient(x, h * 0.4, 0, x, h * 0.4, w * 0.25);
+    gradient.addColorStop(0, 'rgba(255, 255, 200, 0.2)');
+    gradient.addColorStop(1, 'transparent');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, w, h);
+  }
+
+  /**
+   * Render enemy at door if light reveals one.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {'left'|'right'} side
+   * @param {number} officeX
+   * @param {number} w
+   * @param {number} h
+   */
+  _renderEnemyAtDoor(ctx, side, officeX, w, h) {
+    const doorRoom = side === 'left' ? 'dock' : 'generator';
+    const enemy = this._enemies.find(e => e.currentRoom === doorRoom && !e.isDefeated);
+    if (!enemy) return;
+
+    const x = side === 'left' ? officeX + w * 0.04 : officeX + w * 0.88;
+    const y = h * 0.25;
+    const size = w * 0.07;
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.beginPath();
+    ctx.ellipse(x + size / 2, y + size * 0.8, size * 0.4, size * 0.1, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Body
+    ctx.fillStyle = enemy.color || '#ff0000';
+    ctx.beginPath();
+    ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Eyes — glowing white
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(x + size * 0.35, y + size * 0.35, size * 0.1, 0, Math.PI * 2);
+    ctx.arc(x + size * 0.65, y + size * 0.35, size * 0.1, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Pupils
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.arc(x + size * 0.35, y + size * 0.35, size * 0.04, 0, Math.PI * 2);
+    ctx.arc(x + size * 0.65, y + size * 0.35, size * 0.04, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Mouth
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.arc(x + size / 2, y + size * 0.65, size * 0.15, 0, Math.PI);
+    ctx.fill();
+
+    // Teeth
+    ctx.fillStyle = '#ffffff';
+    for (let i = -1; i <= 1; i++) {
+      ctx.fillRect(x + size / 2 + i * size * 0.1 - 2, y + size * 0.65, 4, 5);
+    }
+  }
+
+  _renderCameraView(ctx, w, h) {
+    const cameraId = this._cameraSystem.currentCamera;
+    this._cameraSystem.render(ctx, w, h, {
+      cameraId,
+      enemies: this._enemies,
+      rooms: ROOM_MAP,
+    });
+  }
+
+  _renderPowerOut(ctx, w, h) {
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, w, h);
+
+    if (Math.random() < 0.02) {
+      ctx.fillStyle = 'rgba(50, 50, 50, 0.3)';
+      ctx.fillRect(0, 0, w, h);
+    }
+  }
+
+  _renderDoorButtons(ctx, w, h) {
+    for (const side of ['left', 'right']) {
+      const bounds = this._hudSystem.getDoorButtonBounds(side, w, h);
+      const isClosed = side === 'left' ? !this._officeSystem.leftDoorOpen : !this._officeSystem.rightDoorOpen;
+
+      ctx.fillStyle = isClosed ? COLORS.ACCENT_RED : COLORS.UI_BG;
+      ctx.fillRect(bounds.x, bounds.y, bounds.w, bounds.h);
+      ctx.strokeStyle = COLORS.UI_BORDER;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
+
+      ctx.fillStyle = COLORS.TEXT_PRIMARY;
+      ctx.font = `${UI.FONT_BODY}px Courier New`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(isClosed ? 'DOOR' : 'OPEN', bounds.x + bounds.w / 2, bounds.y + bounds.h / 2);
+    }
+  }
+
+  _renderLightButtons(ctx, w, h) {
+    for (const side of ['left', 'right']) {
+      const bounds = this._hudSystem.getLightButtonBounds(side, w, h);
+      const isOn = side === 'left' ? this._officeSystem.leftLightOn : this._officeSystem.rightLightOn;
+
+      ctx.fillStyle = isOn ? '#ffffaa' : COLORS.UI_BG;
+      ctx.fillRect(bounds.x, bounds.y, bounds.w, bounds.h);
+      ctx.strokeStyle = COLORS.UI_BORDER;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
+
+      ctx.fillStyle = isOn ? '#000000' : COLORS.TEXT_PRIMARY;
+      ctx.font = `${UI.FONT_BODY}px Courier New`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('LIGHT', bounds.x + bounds.w / 2, bounds.y + bounds.h / 2);
+    }
+  }
+
+  _updateHUD() {
+    this._hudSystem.updateState({
+      powerPercent: this._powerSystem.getPowerPercent(),
+      currentTime: this._clockSystem.displayTime,
+      cameraActive: this._cameraSystem.isActive,
+    });
+  }
+
+  _onPowerOut() {
+    this._powerOut = true;
+    this._officeSystem.reset();
+    this._cameraSystem.close();
+  }
+
+  _onJumpscare(enemy) {
+    this._jumpscareSystem.trigger(enemy, () => {
+      this._gameOver = true;
+      eventBus.emit('game:over', { nightId: this._nightId });
+      this._onSceneChange(SCENES.GAME_OVER);
+    });
+  }
+
+  _onVictory() {
+    const nextNight = Math.min(this._nightId + 1, 7);
+    eventBus.emit('game:victory', { night: this._nightId });
+    eventBus.emit('game:night-change', { nightId: nextNight });
+    setTimeout(() => {
+      this._onSceneChange(SCENES.VICTORY);
+    }, 1000);
+  }
+
+  _bindInput() {
+    this._inputManager.on('pointerdown', (x, y) => {
+      if (this._paused || this._gameOver || this._victory) return;
+
+      const pos = { x, y };
+      const w = this._inputManager.gameWidth;
+      const h = this._inputManager.gameHeight;
+
+      // Pause button (top-right)
+      const pauseBounds = this._hudSystem.getPauseButtonBounds(w, h);
+      if (this._isInRect(pos, pauseBounds) && this._onPause) {
+        this._paused = true;
+        this._onPause();
+        return;
+      }
+
+      // Camera toggle
+      const toggleBounds = this._hudSystem.getCameraToggleBounds(w, h);
+      if (this._isInRect(pos, toggleBounds)) {
+        if (this._cameraSystem.isActive) {
+          this._cameraSystem.close();
+        } else {
+          this._cameraSystem.open();
+        }
+        return;
+      }
+
+      // Door buttons
+      for (const side of ['left', 'right']) {
+        const bounds = this._hudSystem.getDoorButtonBounds(side, w, h);
+        if (this._isInRect(pos, bounds)) {
+          this._officeSystem.toggleDoor(side);
+          return;
+        }
+      }
+
+      // Light buttons
+      for (const side of ['left', 'right']) {
+        const bounds = this._hudSystem.getLightButtonBounds(side, w, h);
+        if (this._isInRect(pos, bounds)) {
+          this._officeSystem.toggleLight(side);
+          return;
+        }
+      }
+
+      // Camera map nodes
+      if (this._cameraSystem.isActive) {
+        const nodes = this._hudSystem.getCameraMapNodes(w, h, ROOM_MAP);
+        for (const node of nodes) {
+          const dx = pos.x - node.x;
+          const dy = pos.y - node.y;
+          if (dx * dx + dy * dy <= node.r * node.r) {
+            this._cameraSystem.switchTo(node.id);
+            return;
+          }
+        }
+      }
+
+      // Office pan
+      if (!this._cameraSystem.isActive) {
+        this._isPanning = true;
+        this._panStartX = x;
+        this._panStartOffset = this._officePanTarget;
+      }
+    });
+
+    this._inputManager.on('pointermove', (x, y) => {
+      if (!this._isPanning || this._cameraSystem.isActive) return;
+
+      const dx = x - this._panStartX;
+      const newOffset = Math.max(-this._panMaxOffset, Math.min(this._panMaxOffset, this._panStartOffset + dx));
+      this._officePanTarget = newOffset;
+    });
+
+    this._inputManager.on('pointerup', () => {
+      this._isPanning = false;
+    });
+  }
+
+  _isInRect(pos, rect) {
+    return pos.x >= rect.x && pos.x <= rect.x + rect.w
+      && pos.y >= rect.y && pos.y <= rect.y + rect.h;
+  }
+}
+ 
+ 
+### scenes\PauseScene.js 
+------------------------------------------------------------ 
+/**
+ * PauseScene — pause menu overlay.
+ */
+import { SCENES, COLORS, UI } from '../config/gameConfig.js';
+import { Renderer } from '../engine/Renderer.js';
+
+export class PauseScene {
+  /**
+   * @param {Object} deps
+   * @param {Function} deps.onSceneChange
+   * @param {Object} deps.inputManager
+   */
+  constructor({ onSceneChange, onResume, inputManager }) {
+    this._onSceneChange = onSceneChange;
+    this._onResume = onResume;
+    this._inputManager = inputManager;
+    this._buttons = [];
+  }
+
+  enter() {
+    this._bindInput();
+  }
+
+  exit() {
+    this._inputManager.clearAll();
+  }
+
+  update() {}
+
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} w - Current game width
+   * @param {number} h - Current game height
+   */
+  render(ctx, w, h) {
+    // Dim overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, w, h);
+
+    // Menu box
+    const boxW = w * 0.4;
+    const boxH = h * 0.5;
+    const boxX = (w - boxW) / 2;
+    const boxY = (h - boxH) / 2;
+
+    ctx.fillStyle = COLORS.UI_BG;
+    ctx.fillRect(boxX, boxY, boxW, boxH);
+    ctx.strokeStyle = COLORS.UI_BORDER;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+    // Title
+    const fontSizeSub = Math.min(UI.FONT_SUBTITLE, h * 0.025);
+    ctx.fillStyle = COLORS.TEXT_PRIMARY;
+    ctx.font = `bold ${fontSizeSub}px Courier New`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText('PAUSED', w / 2, boxY + UI.PADDING);
+
+    // Buttons
+    this._buttons = [];
+    const btnW = boxW * 0.7;
+    const btnH = Math.max(44, h * 0.06);
+    const btnX = (w - btnW) / 2;
+    const labels = ['Resume', 'Restart Night', 'Quit to Title'];
+
+    labels.forEach((label, i) => {
+      const btnY = boxY + UI.PADDING + 50 + i * (btnH + 12);
+      this._buttons.push({ label, x: btnX, y: btnY, w: btnW, h: btnH });
+
+      ctx.fillStyle = COLORS.UI_BG;
+      ctx.fillRect(btnX, btnY, btnW, btnH);
+      ctx.strokeStyle = COLORS.UI_BORDER;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(btnX, btnY, btnW, btnH);
+
+      const fontSizeBody = Math.min(UI.FONT_BODY, h * 0.019);
+      ctx.fillStyle = COLORS.TEXT_PRIMARY;
+      ctx.font = `${fontSizeBody}px Courier New`;
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, w / 2, btnY + btnH / 2);
+    });
+
+    // Vignette
+    Renderer.vignette(ctx, w, h, 'rgba(0, 0, 0, 0.3)');
+  }
+
+  _bindInput() {
+    this._inputManager.onPointerDown(({ x, y }) => {
+      for (const btn of this._buttons) {
+        if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
+          this._handleButtonClick(btn.label);
+          return;
+        }
+      }
+    });
+  }
+
+  _handleButtonClick(label) {
+    switch (label) {
+      case 'Resume':
+        if (this._onResume) {
+          this._onResume();
+        }
+        break;
+      case 'Restart Night':
+        this._onSceneChange(SCENES.NIGHT);
+        break;
+      case 'Quit to Title':
+        this._onSceneChange(SCENES.TITLE);
+        break;
+    }
+  }
+}
+ 
+ 
+### scenes\TitleScene.js 
+------------------------------------------------------------ 
+import { SCENES } from '../config/gameConfig.js';
+
+/**
+ * TitleScene — main menu / title screen.
+ * Shows game title, subtitle, and responds to user input
+ * (click, tap, Enter, Space) to proceed to the next module.
+ */
+export class TitleScene {
+  /**
+   * @param {Object} deps
+   * @param {Function} deps.onSceneChange - Callback to switch scenes
+   * @param {Object} deps.inputManager - InputManager for unified input
+   */
+  constructor({ onSceneChange, inputManager }) {
+    this._onSceneChange = onSceneChange;
+    this._inputManager = inputManager;
+    this._pulsePhase = 0;
+  }
+
+  /** Called when scene becomes active */
+  enter() {
+    this._pulsePhase = 0;
+    this._onPointerDown = () => this._proceed();
+    this._onKeyDown = (key) => {
+      if (key === 'enter' || key === ' ') {
+        this._proceed();
+      }
+    };
+    this._inputManager.on('pointerdown', this._onPointerDown);
+    this._inputManager.on('keydown', this._onKeyDown);
+  }
+
+  exit() {
+    this._inputManager.off('pointerdown', this._onPointerDown);
+    this._inputManager.off('keydown', this._onKeyDown);
+  }
+
+  /**
+   * Update animation state.
+   * @param {number} dt - Delta time in seconds
+   */
+  update(dt) {
+    this._pulsePhase += dt * 2;
+  }
+
+  /**
+   * Render title screen.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} w - Current game width
+   * @param {number} h - Current game height
+   */
+  render(ctx, w, h) {
+    // Background
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, w, h);
+
+    // Vignette
+    const vignette = ctx.createRadialGradient(w / 2, h / 2, h * 0.2, w / 2, h / 2, w * 0.8);
+    vignette.addColorStop(0, 'rgba(20, 0, 0, 0.1)');
+    vignette.addColorStop(1, 'rgba(0, 0, 0, 0.7)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(0, 0, w, h);
+
+    // Title
+    const fontSizeTitle = Math.min(48, h * 0.067);
+    ctx.fillStyle = '#8b0000';
+    ctx.font = `bold ${fontSizeTitle}px Courier New`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('ISLAND NIGHT WATCH', w / 2, h * 0.3);
+
+    // Subtitle
+    const fontSizeSub = Math.min(14, h * 0.019);
+    ctx.fillStyle = '#555';
+    ctx.font = `${fontSizeSub}px Courier New`;
+    ctx.fillText('A survival horror experience', w / 2, h * 0.38);
+
+    // Pulsing "press to start"
+    const alpha = 0.4 + Math.sin(this._pulsePhase) * 0.3;
+    const fontSizePulse = Math.min(18, h * 0.025);
+    ctx.fillStyle = `rgba(180, 180, 180, ${alpha})`;
+    ctx.font = `${fontSizePulse}px Courier New`;
+    ctx.fillText('[ CLICK OR PRESS ENTER TO START ]', w / 2, h * 0.6);
+
+    // Version / module info
+    const fontSizeVer = Math.min(11, h * 0.015);
+    ctx.fillStyle = '#333';
+    ctx.font = `${fontSizeVer}px Courier New`;
+    ctx.fillText('Module 1 — Core Framework', w / 2, h * 0.85);
+
+    // Scanlines
+    this._drawScanlines(ctx, w, h);
+  }
+
+  /** Transition to next scene */
+  _proceed() {
+    console.log('[TitleScene] Starting Night 1...');
+    this._onSceneChange(SCENES.NIGHT);
+  }
+
+  /** Draw subtle scanline overlay */
+  _drawScanlines(ctx, w, h) {
+    const spacing = Math.max(3, h * 0.004);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.04)';
+    for (let y = 0; y < h; y += spacing) {
+      ctx.fillRect(0, y, w, 1);
+    }
+  }
+}
+ 
+ 
+### scenes\VictoryScene.js 
+------------------------------------------------------------ 
+/**
+ * VictoryScene — night complete screen.
+ */
+import { SCENES, COLORS, UI } from '../config/gameConfig.js';
+import { Renderer } from '../engine/Renderer.js';
+import { NIGHT_MAP, DEFAULT_NIGHT_ID } from '../data/nights.js';
+import { eventBus } from '../engine/EventBus.js';
+
+export class VictoryScene {
+  /**
+   * @param {Object} deps
+   * @param {Function} deps.onSceneChange
+   * @param {Object} deps.inputManager
+   * @param {number} [deps.nightId]
+   */
+  constructor({ onSceneChange, inputManager, nightId }) {
+    this._onSceneChange = onSceneChange;
+    this._inputManager = inputManager;
+    this._nightId = nightId || DEFAULT_NIGHT_ID;
+    this._elapsed = 0;
+    this._canInteract = false;
+    this._nextNight = DEFAULT_NIGHT_ID;
+
+    eventBus.on('game:victory', ({ night }) => {
+      this._nightId = night;
+      this._nextNight = Math.min(night + 1, 7);
+    });
+  }
+
+  enter() {
+    this._elapsed = 0;
+    this._canInteract = false;
+    this._bindInput();
+  }
+
+  exit() {
+    this._inputManager.clearAll();
+  }
+
+  /**
+   * @param {number} dt
+   */
+  update(dt) {
+    this._elapsed += dt * 1000;
+    if (this._elapsed > 3000) {
+      this._canInteract = true;
+    }
+  }
+
+  /**
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} w - Current game width
+   * @param {number} h - Current game height
+   */
+  render(ctx, w, h) {
+    // Background
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, w, h);
+
+    // 6 AM text
+    const alpha = Math.min(1, this._elapsed / 1500);
+    ctx.globalAlpha = alpha;
+
+    const fontSizeTitle = Math.min(UI.FONT_TITLE, h * 0.067);
+    ctx.fillStyle = COLORS.TEXT_PRIMARY;
+    ctx.font = `bold ${fontSizeTitle}px Courier New`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('6 AM', w / 2, h * 0.3);
+
+    // Night complete
+    const nightName = NIGHT_MAP[this._nightId]?.name || `Night ${this._nightId}`;
+    const fontSizeSub = Math.min(UI.FONT_SUBTITLE, h * 0.025);
+    ctx.fillStyle = COLORS.POWER_OK;
+    ctx.font = `${fontSizeSub}px Courier New`;
+    ctx.fillText(`${nightName} Complete!`, w / 2, h * 0.45);
+
+    // Cheer
+    const fontSizeBody = Math.min(UI.FONT_BODY, h * 0.019);
+    ctx.fillStyle = COLORS.TEXT_SECONDARY;
+    ctx.font = `${fontSizeBody}px Courier New`;
+    ctx.fillText('You survived another night.', w / 2, h * 0.55);
+
+    // Continue prompt
+    if (this._canInteract) {
+      const pulse = 0.5 + Math.sin(Date.now() * 0.003) * 0.5;
+      ctx.globalAlpha = 0.5 + pulse * 0.5;
+      ctx.fillStyle = COLORS.TEXT_PRIMARY;
+      ctx.font = `${fontSizeBody}px Courier New`;
+      const nextNight = Math.min(this._nightId + 1, 7);
+      ctx.fillText(`Click for ${NIGHT_MAP[nextNight]?.name || 'Next Night'}`, w / 2, h * 0.7);
+    }
+
+    ctx.globalAlpha = 1;
+
+    // Subtle vignette
+    Renderer.vignette(ctx, w, h, 'rgba(0, 0, 0, 0.3)');
+  }
+
+  _bindInput() {
+    this._inputManager.onPointerDown(() => {
+      if (this._canInteract) {
+        eventBus.emit('game:night-change', { nightId: this._nextNight });
+        this._onSceneChange(SCENES.NIGHT);
+      }
+    });
+  }
+}
+ 
+ 
+### systems\CameraSystem.js 
+------------------------------------------------------------ 
+/**
+ * CameraSystem — manages camera switching and state.
+ */
+import { Renderer } from '../engine/Renderer.js';
+
+export class CameraSystem {
+  /**
+   * @param {Object} deps
+   * @param {EventBus} deps.eventBus
+   */
+  constructor({ eventBus }) {
+    this._eventBus = eventBus;
+    this._isActive = false;
+    this._currentCamera = null;
+    this._staticNoise = 0.3;
+  }
+
+  /** Open camera system */
+  open() {
+    this._isActive = true;
+    // Auto-select first camera if none is active
+    if (!this._currentCamera) {
+      this._currentCamera = 'helipad';
+    }
+  }
+
+  /** Close camera system */
+  close() {
+    this._isActive = false;
+    this._currentCamera = null;
+  }
+
+  /**
+   * Switch to a specific camera.
+   * @param {string} cameraId
+   */
+  switchTo(cameraId) {
+    if (!this._isActive) return;
+    this._currentCamera = cameraId;
+    this._eventBus.emit('camera:switch', { cameraId });
+  }
+
+  /** @returns {boolean} */
+  get isActive() { return this._isActive; }
+
+  /** @returns {string|null} */
+  get currentCamera() { return this._currentCamera; }
+
+  /** @returns {number} Static noise intensity (0-1) */
+  get staticNoise() { return this._staticNoise; }
+
+  /**
+   * Render camera view.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} w
+   * @param {number} h
+   * @param {Object} options
+   * @param {string} options.cameraId
+   * @param {Array} options.enemies - Current enemy positions
+   * @param {Object} options.rooms - Room definitions
+   */
+  render(ctx, w, h, { cameraId, enemies, rooms }) {
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(0, 0, w, h);
+
+    const room = rooms?.[cameraId];
+    if (room) {
+      this._drawRoom(ctx, w, h, room, rooms);
+      ctx.fillStyle = '#44aa44';
+      ctx.font = 'bold 20px Courier New';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(`CAM: ${room.name}`, 20, 20);
+    }
+
+    if (enemies) {
+      for (const enemy of enemies) {
+        if (enemy.currentRoom === cameraId) {
+          this._drawEnemyIndicator(ctx, w, h, enemy, room);
+        }
+      }
+    }
+
+    this._drawStatic(ctx, w, h);
+  }
+
+  _drawRoom(ctx, w, h, room, allRooms) {
+    const cx = w * 0.5;
+    const cy = h * 0.55;
+
+    ctx.fillStyle = '#1a2a1a';
+    ctx.fillRect(w * 0.15, h * 0.2, w * 0.7, h * 0.6);
+
+    ctx.strokeStyle = '#2a4a2a';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(w * 0.15, h * 0.2, w * 0.7, h * 0.6);
+
+    ctx.fillStyle = '#335533';
+    ctx.font = '14px Courier New';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(room.name, cx, cy);
+
+    const connections = room.connections || [];
+    ctx.fillStyle = '#2a3a2a';
+    ctx.font = '11px Courier New';
+    connections.forEach((connId, i) => {
+      const connRoom = allRooms?.[connId];
+      const label = connRoom ? connRoom.name : connId;
+      ctx.fillText(`→ ${label}`, cx, cy + 25 + i * 16);
+    });
+  }
+
+  _drawStatic(ctx, w, h) {
+    // Horizontal scan lines for CRT effect
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+    for (let y = 0; y < h; y += 4) {
+      if (Math.random() > 0.5) {
+        ctx.fillRect(0, y, w, 1);
+      }
+    }
+
+    // Occasional full-frame static burst
+    if (Math.random() < 0.03) {
+      Renderer.noise(ctx, w, h, 0.15);
+    }
+
+    // Light ambient noise
+    Renderer.noise(ctx, w, h, 0.04);
+
+    // Horizontal glitch lines
+    const glitchCount = Math.floor(Math.random() * 3);
+    for (let i = 0; i < glitchCount; i++) {
+      const y = Math.random() * h;
+      const lineH = Math.random() * 6 + 2;
+      ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.08})`;
+      ctx.fillRect(0, y, w, lineH);
+    }
+
+    // Vignette overlay
+    Renderer.vignette(ctx, w, h, 'rgba(0, 0, 0, 0.5)');
+  }
+
+  _drawEnemyIndicator(ctx, w, h, enemy, room) {
+    // Stable position based on room layout
+    const roomX = room?.x ?? 0;
+    const roomY = room?.y ?? 0;
+
+    // Map room position to screen position
+    const baseX = w * 0.3 + (roomX + 0.5) * w * 0.4;
+    const baseY = h * 0.35 + (roomY + 0.5) * h * 0.35;
+
+    // Subtle idle animation — slow breathing
+    const breathe = Math.sin(Date.now() * 0.003) * 3;
+
+    const x = baseX + breathe;
+    const y = baseY + breathe;
+    const size = 35;
+
+    // Shadow
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+    ctx.beginPath();
+    ctx.ellipse(x, y + size * 0.6, size * 0.5, size * 0.15, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Body
+    ctx.fillStyle = enemy.color || '#ff0000';
+    ctx.beginPath();
+    ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Eyes
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(x - 6, y - 5, 4, 0, Math.PI * 2);
+    ctx.arc(x + 6, y - 5, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.arc(x - 5, y - 5, 2, 0, Math.PI * 2);
+    ctx.arc(x + 7, y - 5, 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Name label
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 13px Courier New';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(enemy.name, x, y + size * 0.5 + 5);
+  }
+}
+ 
+ 
+### systems\ClockSystem.js 
+------------------------------------------------------------ 
+/**
+ * ClockSystem — manages game time progression.
+ * 6 in-game hours per night.
+ */
+export class ClockSystem {
+  /**
+   * @param {Object} deps
+   * @param {EventBus} deps.eventBus
+   */
+  constructor({ eventBus }) {
+    this._eventBus = eventBus;
+    this._currentHour = 0;
+    this._durationMs = 180000;
+    this._elapsed = 0;
+    this._hourDuration = this._durationMs / 6;
+    this._isComplete = false;
+  }
+
+  /**
+   * Reset clock for a new night.
+   * @param {number} durationMs - Total night duration
+   */
+  reset(durationMs = 180000) {
+    this._durationMs = durationMs;
+    this._hourDuration = durationMs / 6;
+    this._currentHour = 0;
+    this._elapsed = 0;
+    this._isComplete = false;
+    this._emitTick();
+  }
+
+  /**
+   * Update clock.
+   * @param {number} dt - Delta time in milliseconds
+   */
+  update(dt) {
+    if (this._isComplete) return;
+
+    this._elapsed += dt;
+
+    const newHour = Math.min(6, Math.floor(this._elapsed / this._hourDuration));
+
+    if (newHour !== this._currentHour) {
+      this._currentHour = newHour;
+      this._emitTick();
+    }
+
+    if (this._currentHour >= 6) {
+      this._isComplete = true;
+    }
+  }
+
+  /** @returns {number} Current hour (0-6) */
+  get currentHour() { return this._currentHour; }
+
+  /** @returns {string} Display time (e.g., "12 AM", "3 AM") */
+  get displayTime() {
+    if (this._currentHour === 0) return '12 AM';
+    if (this._currentHour === 6) return '6 AM';
+    return `${this._currentHour} AM`;
+  }
+
+  /** @returns {number} Progress through current hour (0-1) */
+  get hourProgress() {
+    const hourElapsed = this._elapsed % this._hourDuration;
+    return hourElapsed / this._hourDuration;
+  }
+
+  /** @returns {number} Overall night progress (0-1) */
+  get nightProgress() {
+    return Math.min(1, this._elapsed / this._durationMs);
+  }
+
+  /** @returns {boolean} */
+  get isComplete() { return this._isComplete; }
+
+  _emitTick() {
+    this._eventBus.emit('clock:tick', {
+      hour: this._currentHour,
+      progress: this.nightProgress,
+    });
+  }
+}
+ 
+ 
+### systems\HUDSystem.js 
+------------------------------------------------------------ 
+/**
+ * HUDSystem — renders the game HUD overlay.
+ */
+import { COLORS, UI } from '../config/gameConfig.js';
+
+export class HUDSystem {
+  /**
+   * @param {Object} deps
+   * @param {EventBus} deps.eventBus
+   */
+  constructor({ eventBus }) {
+    this._eventBus = eventBus;
+    this._powerPercent = 100;
+    this._currentTime = '12 AM';
+    this._cameraActive = false;
+    this._showCameraMap = false;
+  }
+
+  /**
+   * Update HUD state.
+   * @param {Object} state
+   */
+  updateState(state) {
+    if (state.powerPercent !== undefined) this._powerPercent = state.powerPercent;
+    if (state.currentTime !== undefined) this._currentTime = state.currentTime;
+    if (state.cameraActive !== undefined) this._cameraActive = state.cameraActive;
+    if (state.showCameraMap !== undefined) this._showCameraMap = state.showCameraMap;
+  }
+
+  /**
+   * Render camera map overlay — FNAF 2 style: nodes + corridor lines.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} w
+   * @param {number} h
+   * @param {Object} rooms - Room definitions
+   * @param {string} selectedCamera - Currently selected camera ID
+   * @param {Array} [enemies] - Enemy array for presence indicators
+   */
+  renderCameraMap(ctx, w, h, rooms, selectedCamera, enemies) {
+    if (!rooms) return;
+
+    const mapW = w * 0.24;
+    const mapH = h * 0.5;
+    const mapX = w - mapW - UI.PADDING - 80;
+    const mapY = h * 0.15;
+
+    const toMapX = (rx) => mapX + UI.PADDING + rx * (mapW - UI.PADDING * 2);
+    const toMapY = (ry) => mapY + UI.PADDING + ry * (mapH - UI.PADDING * 2 - 24);
+
+    const roomsArr = Object.values(rooms).filter(r => !r.isOffice);
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.fillRect(mapX, mapY, mapW, mapH);
+    ctx.strokeStyle = '#1a3a1a';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(mapX, mapY, mapW, mapH);
+
+    ctx.fillStyle = '#2a5a2a';
+    ctx.font = 'bold 10px Courier New';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText('CAMERAS', mapX + UI.PADDING, mapY + 5);
+
+    const drawn = new Set();
+
+    for (const room of roomsArr) {
+      const cx = toMapX(room.x);
+      const cy = toMapY(room.y);
+
+      if (!room.connections) continue;
+
+      for (const connId of room.connections) {
+        const conn = rooms[connId];
+        if (!conn || conn.isOffice) continue;
+
+        const edgeKey = [room.id, connId].sort().join('-');
+        if (drawn.has(edgeKey)) continue;
+        drawn.add(edgeKey);
+
+        const nx = toMapX(conn.x);
+        const ny = toMapY(conn.y);
+
+        const isHighlighted = room.id === selectedCamera || connId === selectedCamera;
+        ctx.strokeStyle = isHighlighted ? 'rgba(139, 0, 0, 0.7)' : 'rgba(60, 120, 60, 0.3)';
+        ctx.lineWidth = isHighlighted ? 2 : 1;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(nx, ny);
+        ctx.stroke();
+      }
+    }
+
+    for (const room of roomsArr) {
+      const cx = toMapX(room.x);
+      const cy = toMapY(room.y);
+      const isSelected = room.id === selectedCamera;
+      const hasEnemy = enemies?.some(e => e.currentRoom === room.id && !e.isDefeated);
+
+      const nodeR = 12;
+
+      if (isSelected) {
+        const pulse = 0.5 + Math.sin(Date.now() * 0.005) * 0.5;
+        ctx.strokeStyle = `rgba(204, 34, 34, ${0.4 + pulse * 0.6})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(cx, cy, nodeR + 5, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      ctx.fillStyle = isSelected ? '#3a1010' : hasEnemy ? '#2a2a10' : '#0a1a0a';
+      ctx.beginPath();
+      ctx.arc(cx, cy, nodeR, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = isSelected ? '#cc2222' : hasEnemy ? '#aa8800' : '#3a7a3a';
+      ctx.lineWidth = isSelected ? 2 : 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, nodeR, 0, Math.PI * 2);
+      ctx.stroke();
+
+      if (hasEnemy) {
+        const blink = Math.sin(Date.now() * 0.008) > 0;
+        if (blink) {
+          ctx.fillStyle = '#ff4400';
+          ctx.beginPath();
+          ctx.arc(cx + nodeR - 2, cy - nodeR + 2, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      ctx.fillStyle = isSelected ? '#ffffff' : '#88aa88';
+      ctx.font = `${isSelected ? 'bold ' : ''}8px Courier New`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+
+      const words = room.name.split(' ');
+      const lineH = 10;
+      const labelY = cy + nodeR + 3;
+      if (words.length > 1) {
+        ctx.fillText(words[0], cx, labelY);
+        ctx.fillText(words.slice(1).join(' '), cx, labelY + lineH);
+      } else {
+        ctx.fillText(room.name, cx, labelY);
+      }
+    }
+  }
+
+  _drawPowerBar(ctx, w, h) {
+    const barW = w * 0.2;
+    const barH = UI.BAR_HEIGHT;
+    const x = UI.PADDING;
+    const y = h - UI.PADDING - barH - 30;
+
+    ctx.fillStyle = COLORS.TEXT_SECONDARY;
+    ctx.font = `${UI.FONT_SMALL}px Courier New`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText('Power', x, y - 4);
+
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(x, y, barW, barH);
+
+    const color = this._powerPercent > 30 ? COLORS.POWER_OK : COLORS.POWER_LOW;
+    ctx.fillStyle = color;
+    ctx.fillRect(x, y, barW * (this._powerPercent / 100), barH);
+
+    ctx.fillStyle = COLORS.TEXT_PRIMARY;
+    ctx.font = `${UI.FONT_BODY}px Courier New`;
+    ctx.textBaseline = 'top';
+    ctx.fillText(`${Math.floor(this._powerPercent)}%`, x, y + barH + 4);
+  }
+
+  _drawClock(ctx, w, h) {
+    ctx.fillStyle = COLORS.TEXT_PRIMARY;
+    ctx.font = `bold ${UI.FONT_SUBTITLE}px Courier New`;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    ctx.fillText(this._currentTime, w - UI.PADDING, UI.PADDING);
+  }
+
+  _drawCameraToggle(ctx, w, h) {
+    const btnW = 120;
+    const btnH = 44;
+    const x = (w - btnW) / 2;
+    const y = h - btnH - UI.PADDING;
+
+    ctx.fillStyle = this._cameraActive ? COLORS.ACCENT_RED : COLORS.UI_BG;
+    ctx.fillRect(x, y, btnW, btnH);
+    ctx.strokeStyle = COLORS.UI_BORDER;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, btnW, btnH);
+
+    ctx.fillStyle = COLORS.TEXT_PRIMARY;
+    ctx.font = `${UI.FONT_BODY}px Courier New`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(this._cameraActive ? 'Close Camera' : 'Open Camera', x + btnW / 2, y + btnH / 2);
+  }
+
+  _drawPauseButton(ctx, w, h) {
+    const btnW = 44;
+    const btnH = 44;
+    const x = w - UI.PADDING - btnW;
+    const y = UI.PADDING + 30;
+
+    ctx.fillStyle = COLORS.UI_BG;
+    ctx.fillRect(x, y, btnW, btnH);
+    ctx.strokeStyle = COLORS.UI_BORDER;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, btnW, btnH);
+
+    ctx.fillStyle = COLORS.TEXT_PRIMARY;
+    ctx.font = 'bold 18px Courier New';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('||', x + btnW / 2, y + btnH / 2);
+  }
+
+  /**
+   * Get camera toggle button bounds for hit testing.
+   * @param {number} w
+   * @param {number} h
+   * @returns {{x: number, y: number, w: number, h: number}}
+   */
+  getCameraToggleBounds(w, h) {
+    const btnW = 120;
+    const btnH = 44;
+    return {
+      x: (w - btnW) / 2,
+      y: h - btnH - UI.PADDING,
+      w: btnW,
+      h: btnH,
+    };
+  }
+
+  /**
+   * Get door button bounds.
+   * @param {'left'|'right'} side
+   * @param {number} w
+   * @param {number} h
+   * @returns {{x: number, y: number, w: number, h: number}}
+   */
+  getDoorButtonBounds(side, w, h) {
+    const btnW = 60;
+    const btnH = 44;
+    const x = side === 'left' ? UI.PADDING : w - UI.PADDING - btnW;
+    const y = h * 0.4;
+    return { x, y, w: btnW, h: btnH };
+  }
+
+  /**
+   * Get light button bounds.
+   * @param {'left'|'right'} side
+   * @param {number} w
+   * @param {number} h
+   * @returns {{x: number, y: number, w: number, h: number}}
+   */
+  getLightButtonBounds(side, w, h) {
+    const btnW = 60;
+    const btnH = 44;
+    const x = side === 'left' ? UI.PADDING : w - UI.PADDING - btnW;
+    const y = h * 0.4 + UI.INTERACTIVE_MIN + 10;
+    return { x, y, w: btnW, h: btnH };
+  }
+
+  getPauseButtonBounds(w, h) {
+    const btnW = 44;
+    const btnH = 44;
+    const x = w - UI.PADDING - btnW;
+    const y = UI.PADDING + 30;
+    return { x, y, w: btnW, h: btnH };
+  }
+
+  /**
+   * Get camera map node screen positions for hit testing.
+   * @param {number} w
+   * @param {number} h
+   * @param {Object} rooms - Room definitions
+   * @returns {Array<{id: string, x: number, y: number, r: number}>}
+   */
+  getCameraMapNodes(w, h, rooms) {
+    if (!rooms) return [];
+
+    const mapW = w * 0.24;
+    const mapH = h * 0.5;
+    const mapX = w - mapW - UI.PADDING - 80;
+    const mapY = h * 0.15;
+
+    const toMapX = (rx) => mapX + UI.PADDING + rx * (mapW - UI.PADDING * 2);
+    const toMapY = (ry) => mapY + UI.PADDING + ry * (mapH - UI.PADDING * 2 - 24);
+
+    const nodes = [];
+    for (const room of Object.values(rooms)) {
+      if (room.isOffice) continue;
+      nodes.push({
+        id: room.id,
+        x: toMapX(room.x),
+        y: toMapY(room.y),
+        r: 18,
+      });
+    }
+    return nodes;
+  }
+}
+ 
+ 
+### systems\JumpscareSystem.js 
+------------------------------------------------------------ 
+/**
+ * JumpscareSystem — handles jumpscare triggers and animation.
+ */
+export class JumpscareSystem {
+  /**
+   * @param {Object} deps
+   * @param {EventBus} deps.eventBus
+   */
+  constructor({ eventBus }) {
+    this._eventBus = eventBus;
+    this._isActive = false;
+    this._currentEnemy = null;
+    this._elapsed = 0;
+    this._duration = 2000;
+    this._onComplete = null;
+  }
+
+  /**
+   * Trigger a jumpscare.
+   * @param {Object} enemy - Enemy data { id, name, color }
+   * @param {Function} onComplete - Callback after jumpscare animation
+   */
+  trigger(enemy, onComplete) {
+    this._isActive = true;
+    this._currentEnemy = enemy;
+    this._elapsed = 0;
+    this._onComplete = onComplete;
+    this._eventBus.emit('jumpscare:trigger', { enemyId: enemy.id });
+  }
+
+  /**
+   * Update jumpscare animation.
+   * @param {number} dt - Delta time in milliseconds
+   */
+  update(dt) {
+    if (!this._isActive) return;
+
+    this._elapsed += dt;
+
+    if (this._elapsed >= this._duration) {
+      this._isActive = false;
+      this._onComplete?.();
+    }
+  }
+
+  /**
+   * Render jumpscare.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} w
+   * @param {number} h
+   */
+  render(ctx, w, h) {
+    if (!this._isActive || !this._currentEnemy) return;
+
+    const progress = this._elapsed / this._duration;
+    const shake = Math.sin(this._elapsed * 0.05) * 20 * (1 - progress);
+
+    ctx.save();
+    ctx.translate(shake, shake * 0.5);
+
+    const flash = Math.sin(this._elapsed * 0.02) > 0;
+    ctx.fillStyle = flash ? '#1a0000' : '#000000';
+    ctx.fillRect(0, 0, w, h);
+
+    const scale = 1 + progress * 0.5;
+    const cx = w / 2;
+    const cy = h / 2;
+
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(scale, scale);
+
+    ctx.fillStyle = this._currentEnemy.color || '#ff0000';
+    ctx.beginPath();
+    ctx.arc(0, 0, 120, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(-35, -20, 25, 0, Math.PI * 2);
+    ctx.arc(35, -20, 25, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.arc(-35, -20, 12, 0, Math.PI * 2);
+    ctx.arc(35, -20, 12, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.arc(0, 30, 50, 0, Math.PI);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    for (let i = -3; i <= 3; i++) {
+      ctx.fillRect(i * 14 - 5, 30, 10, 15);
+    }
+
+    ctx.restore();
+
+    ctx.fillStyle = '#ff0000';
+    ctx.font = 'bold 36px Courier New';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(this._currentEnemy.name, cx, h - 30);
+
+    ctx.restore();
+  }
+
+  /** @returns {boolean} */
+  get isActive() { return this._isActive; }
+}
+ 
+ 
+### systems\OfficeSystem.js 
+------------------------------------------------------------ 
+/**
+ * OfficeSystem — manages doors, lights, and ventilation.
+ */
+export class OfficeSystem {
+  /**
+   * @param {Object} deps
+   * @param {EventBus} deps.eventBus
+   */
+  constructor({ eventBus }) {
+    this._eventBus = eventBus;
+    this._leftDoor = false;
+    this._rightDoor = false;
+    this._leftLight = false;
+    this._rightLight = false;
+    this._fanOn = true;
+  }
+
+  /** Reset office state */
+  reset() {
+    this._leftDoor = false;
+    this._rightDoor = false;
+    this._leftLight = false;
+    this._rightLight = false;
+    this._fanOn = true;
+  }
+
+  /**
+   * Toggle a door.
+   * @param {'left'|'right'} side
+   */
+  toggleDoor(side) {
+    if (side === 'left') {
+      this._leftDoor = !this._leftDoor;
+      this._eventBus.emit('door:toggle', { side: 'left', isOpen: !this._leftDoor });
+    } else if (side === 'right') {
+      this._rightDoor = !this._rightDoor;
+      this._eventBus.emit('door:toggle', { side: 'right', isOpen: !this._rightDoor });
+    }
+  }
+
+  /**
+   * Toggle a light.
+   * @param {'left'|'right'} side
+   */
+  toggleLight(side) {
+    if (side === 'left') {
+      this._leftLight = !this._leftLight;
+      this._eventBus.emit('light:toggle', { side: 'left', isOn: this._leftLight });
+    } else if (side === 'right') {
+      this._rightLight = !this._rightLight;
+      this._eventBus.emit('light:toggle', { side: 'right', isOn: this._rightLight });
+    }
+  }
+
+  /** Toggle fan */
+  toggleFan() {
+    this._fanOn = !this._fanOn;
+  }
+
+  /** @returns {boolean} */
+  get leftDoorOpen() { return !this._leftDoor; }
+
+  /** @returns {boolean} */
+  get rightDoorOpen() { return !this._rightDoor; }
+
+  /** @returns {boolean} */
+  get leftLightOn() { return this._leftLight; }
+
+  /** @returns {boolean} */
+  get rightLightOn() { return this._rightLight; }
+
+  /** @returns {number} Number of closed doors */
+  get activeDoors() {
+    return (this._leftDoor ? 1 : 0) + (this._rightDoor ? 1 : 0);
+  }
+
+  /** @returns {number} Number of active lights */
+  get activeLights() {
+    return (this._leftLight ? 1 : 0) + (this._rightLight ? 1 : 0);
+  }
+
+  /**
+   * Check if enemy is at a door (revealed by light).
+   * @param {string} side - 'left' or 'right'
+   * @param {Array} enemies - Enemy array
+   * @returns {boolean}
+   */
+  isEnemyAtDoor(side, enemies) {
+    const doorRoom = side === 'left' ? 'dock' : 'generator';
+    return enemies.some(e => e.currentRoom === doorRoom);
+  }
+}
+ 
+ 
+### systems\PowerSystem.js 
+------------------------------------------------------------ 
+/**
+ * PowerSystem — manages power drain and emergency mode.
+ * Power drains based on active systems (doors, lights, cameras).
+ */
+export class PowerSystem {
+  /**
+   * @param {Object} deps
+   * @param {EventBus} deps.eventBus
+   */
+  constructor({ eventBus }) {
+    this._eventBus = eventBus;
+    this._maxPower = 100;
+    this._currentPower = this._maxPower;
+    this._drainRate = 0.15;
+    this._doorDrain = 0.1;
+    this._lightDrain = 0.05;
+    this._cameraDrain = 0.08;
+    this._isDraining = true;
+    this._activeDoors = 0;
+    this._activeLights = 0;
+    this._cameraActive = false;
+  }
+
+  /** Reset power to full */
+  reset() {
+    this._currentPower = this._maxPower;
+    this._activeDoors = 0;
+    this._activeLights = 0;
+    this._cameraActive = false;
+    this._isDraining = true;
+    this._emitChange();
+  }
+
+  /**
+   * Set the number of active doors.
+   * @param {number} count
+   */
+  setActiveDoors(count) {
+    this._activeDoors = Math.max(0, count);
+  }
+
+  /**
+   * Set the number of active lights.
+   * @param {number} count
+   */
+  setActiveLights(count) {
+    this._activeLights = Math.max(0, count);
+  }
+
+  /**
+   * Set camera active state.
+   * @param {boolean} active
+   */
+  setCameraActive(active) {
+    this._cameraActive = active;
+  }
+
+  /**
+   * Update power drain.
+   * @param {number} dt - Delta time in seconds
+   */
+  update(dt) {
+    if (!this._isDraining || this._currentPower <= 0) return;
+
+    const totalDrain = this._drainRate
+      + (this._activeDoors * this._doorDrain)
+      + (this._activeLights * this._lightDrain)
+      + (this._cameraActive ? this._cameraDrain : 0);
+
+    this._currentPower = Math.max(0, this._currentPower - totalDrain * dt);
+
+    if (this._currentPower <= 0) {
+      this._isDraining = false;
+    }
+
+    this._emitChange();
+  }
+
+  /** @returns {number} Current power (0-100) */
+  get currentPower() { return this._currentPower; }
+
+  /** @returns {number} Max power */
+  get maxPower() { return this._maxPower; }
+
+  /** @returns {number} Power as percentage (0-100) */
+  getPowerPercent() { return (this._currentPower / this._maxPower) * 100; }
+
+  /** @returns {boolean} Whether power is depleted */
+  get isDepleted() { return this._currentPower <= 0; }
+
+  _emitChange() {
+    this._eventBus.emit('power:change', {
+      current: this._currentPower,
+      max: this._maxPower,
+      percent: this.getPowerPercent(),
+    });
+  }
+}
+ 
+ 
+### yandex\YandexAds.js 
+------------------------------------------------------------ 
+/**
+ * YandexAds — ad management wrapper.
+ * Handles interstitial and rewarded ads with fallback.
+ */
+export class YandexAds {
+  /**
+   * @param {Object} sdk - YandexSDK instance
+   */
+  constructor(sdk) {
+    this._sdk = sdk;
+  }
+
+  /** Show interstitial ad */
+  async showInterstitial() {
+    if (this._sdk?.isAvailable) {
+      return this._sdk.showFullscreenAdv();
+    }
+    return false;
+  }
+
+  /**
+   * Show rewarded ad.
+   * @param {Function} onReward - Called when reward is granted
+   */
+  async showRewarded(onReward) {
+    if (this._sdk?.isAvailable && this._sdk._sdk) {
+      try {
+        await this._sdk._sdk.adv.showRewardedVideo({
+          onRewarded: () => onReward?.(),
+        });
+        return true;
+      } catch (e) { /* fallback */ }
+    }
+    // Mock: grant reward immediately
+    onReward?.();
+    return false;
+  }
+}
+ 
+ 
+### yandex\YandexLeaderboard.js 
+------------------------------------------------------------ 
+/**
+ * YandexLeaderboard — leaderboard wrapper.
+ */
+export class YandexLeaderboard {
+  /**
+   * @param {Object} sdk - YandexSDK instance
+   */
+  constructor(sdk) {
+    this._sdk = sdk;
+  }
+
+  /**
+   * Submit a score.
+   * @param {string} leaderboardName - Leaderboard identifier
+   * @param {number} score - Score value
+   */
+  async submit(leaderboardName, score) {
+    if (this._sdk?.leaderboard) {
+      try {
+        await this._sdk.leaderboard.setLeaderboardScore(leaderboardName, score);
+        return true;
+      } catch (e) { /* fallback */ }
+    }
+    return false;
+  }
+
+  /**
+   * Get top entries.
+   * @param {string} leaderboardName
+   * @param {number} count - Number of entries
+   * @returns {Array} Top entries
+   */
+  async getTop(leaderboardName, count = 10) {
+    if (this._sdk?.leaderboard) {
+      try {
+        const result = await this._sdk.leaderboard.getLeaderboardEntries(leaderboardName, { quantityTop: count });
+        return result?.entries || [];
+      } catch (e) { /* fallback */ }
+    }
+    return [];
+  }
+}
+ 
+ 
+### yandex\YandexPlayer.js 
+------------------------------------------------------------ 
+/**
+ * YandexPlayer — cloud save/load wrapper.
+ */
+export class YandexPlayer {
+  /**
+   * @param {Object} sdk - YandexSDK instance
+   */
+  constructor(sdk) {
+    this._sdk = sdk;
+    this._cache = {};
+  }
+
+  /** Load saved data */
+  async load() {
+    try {
+      const data = await this._sdk.getData();
+      this._cache = data || {};
+    } catch (e) {
+      this._cache = {};
+    }
+    return this._cache;
+  }
+
+  /** Save data */
+  async save(data) {
+    this._cache = { ...this._cache, ...data };
+    await this._sdk.setData(this._cache);
+  }
+
+  /** Get a value from cache */
+  get(key, defaultValue) {
+    return this._cache[key] ?? defaultValue;
+  }
+
+  /** Set a value in cache (call save() to persist) */
+  set(key, value) {
+    this._cache[key] = value;
+  }
+}
+ 
+ 
+### yandex\YandexSDK.js 
+------------------------------------------------------------ 
+/**
+ * YandexSDK — wrapper for Yandex Games SDK v2.
+ * Provides graceful fallback to mock when SDK is unavailable.
+ */
+export class YandexSDK {
+  constructor() {
+    this._sdk = null;
+    this._player = null;
+    this._leaderboard = null;
+    this._initialized = false;
+    this._mockData = {};
+  }
+
+  /** Initialize the Yandex SDK */
+  async init() {
+    try {
+      if (window.YaGames) {
+        this._sdk = await YaGames.init();
+        this._player = await this._sdk.getPlayer();
+        this._leaderboard = this._sdk.getLeaderboards();
+        this._initialized = true;
+        console.log('[YandexSDK] Initialized');
+      } else {
+        console.warn('[YandexSDK] SDK not available, using mock');
+      }
+    } catch (e) {
+      console.warn('[YandexSDK] Init failed, using mock:', e);
+    }
+    return this;
+  }
+
+  /** @returns {boolean} Whether real SDK is available */
+  get isAvailable() { return this._initialized; }
+
+  /** @returns {Object|null} Raw SDK player instance */
+  get player() { return this._player; }
+
+  /** @returns {Object|null} Raw SDK leaderboard instance */
+  get leaderboard() { return this._leaderboard; }
+
+  /** Prompt user for data access */
+  async requestPlayerDataAccess() {
+    if (this._player) {
+      return this._player.getDataAccess?.();
+    }
+    return 'ok';
+  }
+
+  /** Get game data from cloud */
+  async getData() {
+    if (this._player) {
+      try { return await this._player.getData(); } catch (e) { /* fallback */ }
+    }
+    return { ...this._mockData };
+  }
+
+  /** Save game data to cloud */
+  async setData(data) {
+    if (this._player) {
+      try { await this._player.setData(data); } catch (e) { /* fallback */ }
+    }
+    this._mockData = { ...data };
+  }
+
+  /** Show fullscreen ad */
+  async showFullscreenAdv() {
+    if (this._sdk) {
+      try {
+        await this._sdk.adv.showFullscreenAdv();
+        return true;
+      } catch (e) { /* fallback */ }
+    }
+    return false;
+  }
+
+  /** Get platform info */
+  getPlatformInfo() {
+    if (this._sdk) {
+      return {
+        id: this._sdk.deviceInfo?.type || 'unknown',
+        language: this._sdk.environment?.i18n?.lang || 'en',
+      };
+    }
+    return { id: 'desktop', language: 'en' };
+  }
+
+  /** Signal gameplay start (for ad timing) */
+  gameplayStart() {
+    this._sdk?.features?.GameplayAPI?.start();
+  }
+
+  /** Signal gameplay stop (for ad timing) */
+  gameplayStop() {
+    this._sdk?.features?.GameplayAPI?.stop();
+  }
+}
+
+/** Singleton instance */
+export const yandexSDK = new YandexSDK();
+ 
+ 
