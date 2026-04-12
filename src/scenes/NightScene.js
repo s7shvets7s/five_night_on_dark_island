@@ -3,6 +3,7 @@
  * Manages office view, camera system, all game systems integration.
  */
 import { SCENES, COLORS, UI, CONFIG } from '../config/gameConfig.js';
+import { ENEMY_CONFIG, ENEMY_MAP, DOOR_POSITIONS_PERCENT, DOOR_IMAGE_SIZE } from '../config/enemyConfig.js';
 import { PowerSystem } from '../systems/PowerSystem.js';
 import { CameraSystem } from '../systems/CameraSystem.js';
 import { ClockSystem } from '../systems/ClockSystem.js';
@@ -13,7 +14,6 @@ import { CameraGlitchMiniGame } from '../systems/CameraGlitchMiniGame.js';
 import { GeneratorMiniGame } from '../systems/GeneratorMiniGame.js';
 import { Enemy } from '../entities/Enemy.js';
 import { EnemyAI } from '../ai/EnemyAI.js';
-import { ENEMY_MAP } from '../data/enemies.js';
 import { ROOM_MAP } from '../data/rooms.js';
 import { NIGHT_MAP, DEFAULT_NIGHT_ID } from '../data/nights.js';
 import { eventBus } from '../engine/EventBus.js';
@@ -107,12 +107,10 @@ export class NightScene {
       if (!def) continue;
 
       const enemy = new Enemy({
-        id: def.id,
-        name: def.name,
-        color: def.color,
+        id: spawn.enemyId,
         startRoom: spawn.startRoom,
+        aggression: spawn.aggression,
       });
-      enemy.setAggression(spawn.aggression);
       this._enemies.push(enemy);
       this._enemyStartHours.set(enemy.id, spawn.startHour);
     }
@@ -172,10 +170,7 @@ export class NightScene {
         const startHour = this._enemyStartHours.get(enemy.id) ?? 0;
         if (currentHour < startHour) continue;
 
-        const def = ENEMY_MAP[enemy.id];
-        if (!def) continue;
-
-        const result = this._enemyAI.update(enemy, def, dtMs, this._officeSystem, this._maskActive);
+        const result = this._enemyAI.update(enemy, dtMs, this._officeSystem, this._maskActive);
         if (result === 'attacked') {
           enemy.defeat();
           this._onJumpscare(enemy);
@@ -355,8 +350,13 @@ export class NightScene {
     const enemy = this._enemies.find(e => e.currentRoom === doorRoom && !e.isDefeated);
     if (!enemy) return;
 
-    const x = side === 'left' ? officeX + w * 0.04 : officeX + w * 0.88;
-    const y = h * 0.25;
+    const doorPos = side === 'left' ? DOOR_POSITIONS_PERCENT.left : DOOR_POSITIONS_PERCENT.right;
+    const enemyOffset = enemy.doorOffset;
+
+    const xOffset = (doorPos.x * w) + (enemyOffset.x * w / DOOR_IMAGE_SIZE.width);
+    const yOffset = (doorPos.y * h) + (enemyOffset.y * h / DOOR_IMAGE_SIZE.height);
+    const x = xOffset;
+    const y = yOffset;
     const size = w * 0.07;
 
     // Shadow

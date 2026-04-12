@@ -35,7 +35,7 @@ export const NIGHTS = [
     durationMs: 210000,
     spawns: [
       { enemyId: 'bonnie', aggression: 5, startHour: 0, startRoom: 'helipad' },
-      { enemyId: 'chica', aggression: 3, startHour: 1, startRoom: 'helipad' },
+      { enemyId: 'foxy', aggression: 3, startHour: 1, startRoom: 'helipad' },
     ],
   },
   {
@@ -45,6 +45,7 @@ export const NIGHTS = [
     spawns: [
       { enemyId: 'bonnie', aggression: 7, startHour: 0, startRoom: 'helipad' },
       { enemyId: 'chica', aggression: 5, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'foxy', aggression: 5, startHour: 1, startRoom: 'helipad' },
       { enemyId: 'freddy', aggression: 2, startHour: 2, startRoom: 'helipad' },
     ],
   },
@@ -55,6 +56,7 @@ export const NIGHTS = [
     spawns: [
       { enemyId: 'bonnie', aggression: 10, startHour: 0, startRoom: 'helipad' },
       { enemyId: 'chica', aggression: 8, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'foxy', aggression: 7, startHour: 0, startRoom: 'helipad' },
       { enemyId: 'freddy', aggression: 6, startHour: 1, startRoom: 'helipad' },
     ],
   },
@@ -65,6 +67,7 @@ export const NIGHTS = [
     spawns: [
       { enemyId: 'bonnie', aggression: 13, startHour: 0, startRoom: 'helipad' },
       { enemyId: 'chica', aggression: 12, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'foxy', aggression: 10, startHour: 0, startRoom: 'helipad' },
       { enemyId: 'freddy', aggression: 10, startHour: 0, startRoom: 'helipad' },
     ],
   },
@@ -75,6 +78,7 @@ export const NIGHTS = [
     spawns: [
       { enemyId: 'bonnie', aggression: 18, startHour: 0, startRoom: 'helipad' },
       { enemyId: 'chica', aggression: 17, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'foxy', aggression: 15, startHour: 0, startRoom: 'helipad' },
       { enemyId: 'freddy', aggression: 15, startHour: 0, startRoom: 'helipad' },
     ],
   },
@@ -85,6 +89,7 @@ export const NIGHTS = [
     spawns: [
       { enemyId: 'bonnie', aggression: 20, startHour: 0, startRoom: 'helipad' },
       { enemyId: 'chica', aggression: 20, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'foxy', aggression: 20, startHour: 0, startRoom: 'helipad' },
       { enemyId: 'freddy', aggression: 20, startHour: 0, startRoom: 'helipad' },
     ],
   },
