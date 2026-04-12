@@ -97,6 +97,15 @@ export class PowerSystem {
     this._emitChange();
   }
 
+  /**
+   * Add power (for generator success).
+   * @param {number} amount
+   */
+  add(amount) {
+    this._currentPower = Math.min(this._maxPower, this._currentPower + amount);
+    this._emitChange();
+  }
+
   _emitChange() {
     this._eventBus.emit('power:change', {
       current: this._currentPower,

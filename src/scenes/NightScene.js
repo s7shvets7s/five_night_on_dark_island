@@ -10,6 +10,7 @@ import { OfficeSystem } from '../systems/OfficeSystem.js';
 import { JumpscareSystem } from '../systems/JumpscareSystem.js';
 import { HUDSystem } from '../systems/HUDSystem.js';
 import { CameraGlitchMiniGame } from '../systems/CameraGlitchMiniGame.js';
+import { GeneratorMiniGame } from '../systems/GeneratorMiniGame.js';
 import { Enemy } from '../entities/Enemy.js';
 import { EnemyAI } from '../ai/EnemyAI.js';
 import { ENEMY_MAP } from '../data/enemies.js';
@@ -46,6 +47,11 @@ export class NightScene {
       eventBus,
       onSolve: () => {},
       onFail: () => this._onGlitchFail(),
+    });
+    this._generatorMiniGame = new GeneratorMiniGame({
+      eventBus,
+      onSuccess: () => this._powerSystem.add(CONFIG.GENERATOR_SUCCESS_BONUS),
+      onFail: (reason) => this._powerSystem.drain(CONFIG.GENERATOR_FAIL_PENALTY),
     });
 
     this._enemies = [];
@@ -93,6 +99,8 @@ export class NightScene {
     this._maskCooldown = 0;
 
     this._glitchMiniGame.init(this._nightId);
+
+    this._generatorMiniGame.reset();
 
     for (const spawn of this._nightConfig.spawns) {
       const def = ENEMY_MAP[spawn.enemyId];
@@ -154,6 +162,8 @@ export class NightScene {
     }
 
     this._glitchMiniGame.update(dt, this._cameraSystem.currentCamera);
+
+    this._generatorMiniGame.update(dt);
 
     if (!this._powerOut && !this._jumpscareSystem.isActive) {
       const currentHour = this._clockSystem.currentHour;
@@ -227,11 +237,17 @@ export class NightScene {
     Renderer.vignette(ctx, w, h, 'rgba(0, 0, 0, 0.4)');
     Renderer.scanlines(ctx, w, h);
 
-    this._renderDoorButtons(ctx, w, h);
-    this._renderLightButtons(ctx, w, h);
-
     if (this._cameraSystem.isActive) {
       this._hudSystem.renderCameraMap(ctx, w, h, ROOM_MAP, this._cameraSystem.currentCamera, this._enemies);
+    }
+
+    this._renderDoorButtons(ctx, w, h);
+    this._renderLightButtons(ctx, w, h);
+    this._hudSystem.renderMaskButton(ctx, w, h, this._maskActive, this._maskCooldown);
+    this._renderGeneratorButton(ctx, w, h);
+
+    if (this._generatorMiniGame.isShowingMenu) {
+      this._renderGeneratorMenu(ctx, w, h);
     }
   }
 
@@ -439,6 +455,133 @@ export class NightScene {
     }
   }
 
+  _renderGeneratorButton(ctx, w, h) {
+    const bounds = this._hudSystem.getGeneratorButtonBounds(w, h);
+    const isActive = this._generatorMiniGame.isActive;
+    const isShowingMenu = this._generatorMiniGame.isShowingMenu;
+
+    let bgColor = COLORS.UI_BG;
+    let textColor = COLORS.TEXT_PRIMARY;
+    let text = 'GENERATOR';
+    let borderColor = COLORS.UI_BORDER;
+    let lineWidth = 2;
+
+    if (isShowingMenu) {
+      bgColor = '#44aa44';
+      textColor = '#000000';
+      text = 'ROTATE >>';
+      borderColor = '#44ff44';
+      lineWidth = 3;
+    } else if (isActive) {
+      const blinkRate = CONFIG.GENERATOR_BLINK_RATE;
+      const blink = Math.sin(Date.now() / 1000 * Math.PI * 2 * blinkRate) > 0;
+      bgColor = blink ? '#ffaa00' : COLORS.UI_BG;
+      textColor = blink ? '#000000' : '#ffaa00';
+      text = 'TAP NOW!';
+      borderColor = '#ffaa00';
+      lineWidth = 3;
+    } else {
+      text = 'GENERATOR OK';
+      textColor = '#44aa44';
+    }
+
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(bounds.x, bounds.y, bounds.w, bounds.h);
+    ctx.strokeStyle = borderColor;
+    ctx.lineWidth = lineWidth;
+    ctx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
+
+    ctx.fillStyle = textColor;
+    ctx.font = `bold ${UI.FONT_BODY}px Courier New`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, bounds.x + bounds.w / 2, bounds.y + bounds.h / 2);
+  }
+
+  _renderGeneratorMenu(ctx, w, h) {
+    const center = this._getGeneratorMenuCenter(w, h);
+    const radius = 80;
+    const progress = this._generatorMiniGame.progress;
+    const direction = this._generatorMiniGame.direction;
+    const timeLeft = this._generatorMiniGame.timeLeft;
+    const rotationsNeeded = CONFIG.GENERATOR_ROTATIONS_NEEDED;
+    const isCharged = this._generatorMiniGame.isCharged;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+    ctx.strokeStyle = '#44ff44';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, radius + 20, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    if (isCharged) {
+      ctx.fillStyle = '#44ff44';
+      ctx.font = 'bold 20px Courier New';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('ПОЛНЫЙ', center.x, center.y - 20);
+      ctx.fillText('ЗАРЯД', center.x, center.y + 10);
+
+      ctx.beginPath();
+      ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = '#44ff44';
+      ctx.lineWidth = 6;
+      ctx.stroke();
+
+      ctx.fillStyle = '#888888';
+      ctx.font = '14px Courier New';
+      ctx.fillText('CLICK TO CLOSE', center.x, center.y + radius + 30);
+      return;
+    }
+
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = '#333333';
+    ctx.lineWidth = 8;
+    ctx.stroke();
+
+    const progressRad = (progress / (360 * rotationsNeeded)) * Math.PI * 2;
+    const startAngle = -Math.PI / 2;
+    ctx.beginPath();
+    ctx.arc(center.x, center.y, radius, startAngle, startAngle + progressRad);
+    ctx.strokeStyle = direction === 'CW' ? '#44ff44' : '#ff8844';
+    ctx.lineWidth = 8;
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(center.x + radius * 0.7 * Math.cos(startAngle + progressRad), 
+               center.y + radius * 0.7 * Math.sin(startAngle + progressRad));
+    ctx.lineTo(center.x + radius * 1.1 * Math.cos(startAngle + progressRad), 
+               center.y + radius * 1.1 * Math.sin(startAngle + progressRad));
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 16px Courier New';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(direction === 'CW' ? 'CLOCKWISE' : 'COUNTER-CW', center.x, center.y - radius - 25);
+
+    ctx.fillStyle = timeLeft < 1.5 ? '#ff4444' : '#ffffff';
+    ctx.font = 'bold 24px Courier New';
+    ctx.fillText(Math.ceil(timeLeft).toString(), center.x, center.y + radius + 25);
+
+    ctx.fillStyle = '#888888';
+    ctx.font = '12px Courier New';
+    const currentRotation = progress > 0 ? Math.floor((progress - 1) / 360) + 1 : 0;
+    ctx.fillText(currentRotation > 0 ? `${currentRotation}/${rotationsNeeded}` : 'START', center.x, center.y);
+  }
+
+  _getGeneratorMenuCenter(w, h) {
+    const btnBounds = this._hudSystem.getGeneratorButtonBounds(w, h);
+    return {
+      x: btnBounds.x + btnBounds.w / 2,
+      y: btnBounds.y - 100,
+    };
+  }
+
   _updateHUD() {
     this._hudSystem.updateState({
       powerPercent: this._powerSystem.getPowerPercent(),
@@ -482,6 +625,15 @@ export class NightScene {
       const pos = { x, y };
       const w = this._inputManager.gameWidth;
       const h = this._inputManager.gameHeight;
+
+      // Close generator menu if clicking outside
+      if (this._generatorMiniGame.isShowingMenu) {
+        const generatorBounds = this._hudSystem.getGeneratorButtonBounds(w, h);
+        if (!this._isInRect(pos, generatorBounds)) {
+          this._generatorMiniGame.closeInteraction();
+          return;
+        }
+      }
 
       // Pause button (top-right)
       const pauseBounds = this._hudSystem.getPauseButtonBounds(w, h);
@@ -537,6 +689,17 @@ export class NightScene {
         }
       }
 
+      // Generator button
+      const generatorBounds = this._hudSystem.getGeneratorButtonBounds(w, h);
+      if (this._isInRect(pos, generatorBounds)) {
+        if (this._generatorMiniGame.isShowingMenu) {
+          this._generatorMiniGame.closeInteraction();
+        } else {
+          this._generatorMiniGame.startInteraction();
+        }
+        return;
+      }
+
       // Camera map nodes - can always switch cameras (leaves glitched camera)
       if (this._cameraSystem.isActive) {
         // Always try glitch click first
@@ -568,6 +731,13 @@ export class NightScene {
     });
 
     this._inputManager.on('pointermove', (x, y) => {
+      if (this._generatorMiniGame.isShowingMenu) {
+        const w = this._inputManager.gameWidth;
+        const h = this._inputManager.gameHeight;
+        const menuCenter = this._getGeneratorMenuCenter(w, h);
+        this._generatorMiniGame.handleMouseMove(x, y, menuCenter.x, menuCenter.y);
+      }
+
       if (!this._isPanning || this._cameraSystem.isActive) return;
 
       const dx = x - this._panStartX;

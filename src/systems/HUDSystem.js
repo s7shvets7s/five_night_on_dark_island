@@ -464,6 +464,20 @@ export class HUDSystem {
     return { x, y, w: btnW, h: btnH };
   }
 
+  /**
+   * Get generator button bounds (left of mask button).
+   * @param {number} w
+   * @param {number} h
+   * @returns {{x: number, y: number, w: number, h: number}}
+   */
+  getGeneratorButtonBounds(w, h) {
+    const btnW = 120;
+    const btnH = 44;
+    const x = w - btnW * 2 - 30;
+    const y = h - btnH - 20;
+    return { x, y, w: btnW, h: btnH };
+  }
+
   getPauseButtonBounds(w, h) {
     const btnW = 44;
     const btnH = 44;
