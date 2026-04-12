@@ -88,6 +88,15 @@ export class PowerSystem {
   /** @returns {boolean} Whether power is depleted */
   get isDepleted() { return this._currentPower <= 0; }
 
+  /**
+   * Drain a specific amount of power.
+   * @param {number} amount
+   */
+  drain(amount) {
+    this._currentPower = Math.max(0, this._currentPower - amount);
+    this._emitChange();
+  }
+
   _emitChange() {
     this._eventBus.emit('power:change', {
       current: this._currentPower,

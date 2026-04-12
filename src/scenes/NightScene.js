@@ -9,6 +9,7 @@ import { ClockSystem } from '../systems/ClockSystem.js';
 import { OfficeSystem } from '../systems/OfficeSystem.js';
 import { JumpscareSystem } from '../systems/JumpscareSystem.js';
 import { HUDSystem } from '../systems/HUDSystem.js';
+import { CameraGlitchMiniGame } from '../systems/CameraGlitchMiniGame.js';
 import { Enemy } from '../entities/Enemy.js';
 import { EnemyAI } from '../ai/EnemyAI.js';
 import { ENEMY_MAP } from '../data/enemies.js';
@@ -41,6 +42,11 @@ export class NightScene {
     this._jumpscareSystem = new JumpscareSystem({ eventBus });
     this._hudSystem = new HUDSystem({ eventBus });
     this._enemyAI = new EnemyAI({ eventBus });
+    this._glitchMiniGame = new CameraGlitchMiniGame({
+      eventBus,
+      onSolve: () => {},
+      onFail: () => this._onGlitchFail(),
+    });
 
     this._enemies = [];
     this._enemyStartHours = new Map();
@@ -85,6 +91,8 @@ export class NightScene {
     this._maskActive = false;
     this._maskOxygen = 0;
     this._maskCooldown = 0;
+
+    this._glitchMiniGame.init(this._nightId);
 
     for (const spawn of this._nightConfig.spawns) {
       const def = ENEMY_MAP[spawn.enemyId];
@@ -145,121 +153,7 @@ export class NightScene {
       this._onPowerOut();
     }
 
-    if (!this._powerOut && !this._jumpscareSystem.isActive) {
-      const currentHour = this._clockSystem.currentHour;
-      for (const enemy of this._enemies) {
-        if (enemy.isDefeated) continue;
-        const startHour = this._enemyStartHours.get(enemy.id) ?? 0;
-        if (currentHour < startHour) continue;
-
-        const def = ENEMY_MAP[enemy.id];
-        if (!def) continue;
-
-        const result = this._enemyAI.update(enemy, def, dtMs, this._officeSystem, this._maskActive);
-        if (result === 'attacked') {
-          enemy.defeat();
-          this._onJumpscare(enemy);
-          return;
-        }
-      }
-    }
-
-    if (this._jumpscareSystem.isActive) {
-      this._jumpscareSystem.update(dtMs);
-    }
-
-    if (this._maskActive) {
-      this._maskOxygen -= dt;
-      if (this._maskOxygen <= 0) {
-        this._maskActive = false;
-        this._maskOxygen = 0;
-        this._maskCooldown = CONFIG.MASK_COOLDOWN;
-      }
-    } else if (this._maskCooldown > 0) {
-      this._maskCooldown -= dt;
-      if (this._maskCooldown < 0) this._maskCooldown = 0;
-    }
-
-    this._updateHUD();
-  }
-
-  /**
-   * @param {CanvasRenderingContext2D} ctx
-   * @param {number} w - Current game width
-   * @param {number} h - Current game height
-   */
-  render(ctx, w, h) {
-    if (this._jumpscareSystem.isActive) {
-      this._jumpscareSystem.render(ctx, w, h);
-      return;
-    }
-
-    if (this._cameraSystem.isActive) {
-      this._renderCameraView(ctx, w, h);
-    } else if (this._powerOut) {
-      this._renderPowerOut(ctx, w, h);
-    } else {
-      this._renderOffice(ctx, w, h);
-    }
-
-    this._hudSystem.render(ctx, w, h);
-
-    if (this._maskActive) {
-      this._hudSystem.renderMaskOverlay(ctx, w, h);
-      this._hudSystem.renderOxygenBar(ctx, w, h, this._maskOxygen);
-    }
-    this._hudSystem.renderMaskButton(ctx, w, h, this._maskActive, this._maskCooldown);
-
-    if (this._cameraSystem.isActive) {
-      this._hudSystem.renderCameraMap(ctx, w, h, ROOM_MAP, this._cameraSystem.currentCamera, this._enemies);
-    }
-
-    Renderer.vignette(ctx, w, h, 'rgba(0, 0, 0, 0.4)');
-    Renderer.scanlines(ctx, w, h);
-
-    this._renderDoorButtons(ctx, w, h);
-    this._renderLightButtons(ctx, w, h);
-  }
-
-  /** Called when returning to this scene (e.g. after pause pop). */
-  resume() {
-    this._paused = false;
-  }
-
-  exit() {
-    this._inputManager.clearAll();
-  }
-
-  /**
-   * @param {number} dt
-   */
-  update(dt) {
-    if (this._paused || this._gameOver || this._victory) return;
-
-    const dtMs = dt * 1000;
-
-    const panSpeed = 8;
-    const panDiff = this._officePanTarget - this._officePanX;
-    if (Math.abs(panDiff) > 0.5) {
-      this._officePanX += panDiff * panSpeed * dt;
-    } else {
-      this._officePanX = this._officePanTarget;
-    }
-
-    this._clockSystem.update(dtMs);
-    if (this._clockSystem.isComplete) {
-      this._victory = true;
-      this._onVictory();
-      return;
-    }
-
-    this._powerSystem.setActiveDoors(this._officeSystem.activeDoors);
-    this._powerSystem.setActiveLights(this._officeSystem.activeLights);
-    this._powerSystem.setCameraActive(this._cameraSystem.isActive);
-    this._powerSystem.update(dt);
-    if (this._powerSystem.isDepleted && !this._powerOut) {
-      this._onPowerOut();
-    }
+    this._glitchMiniGame.update(dt, this._cameraSystem.currentCamera);
 
     if (!this._powerOut && !this._jumpscareSystem.isActive) {
       const currentHour = this._clockSystem.currentHour;
@@ -312,6 +206,10 @@ export class NightScene {
 
     if (this._cameraSystem.isActive) {
       this._renderCameraView(ctx, w, h);
+
+      if (this._glitchMiniGame.isActive && this._glitchMiniGame.glitchedCamera === this._cameraSystem.currentCamera) {
+        this._glitchMiniGame.render(ctx, w, h);
+      }
     } else if (this._powerOut) {
       this._renderPowerOut(ctx, w, h);
     } else {
@@ -326,15 +224,15 @@ export class NightScene {
     }
     this._hudSystem.renderMaskButton(ctx, w, h, this._maskActive, this._maskCooldown);
 
-    if (this._cameraSystem.isActive) {
-      this._hudSystem.renderCameraMap(ctx, w, h, ROOM_MAP, this._cameraSystem.currentCamera, this._enemies);
-    }
-
     Renderer.vignette(ctx, w, h, 'rgba(0, 0, 0, 0.4)');
     Renderer.scanlines(ctx, w, h);
 
     this._renderDoorButtons(ctx, w, h);
     this._renderLightButtons(ctx, w, h);
+
+    if (this._cameraSystem.isActive) {
+      this._hudSystem.renderCameraMap(ctx, w, h, ROOM_MAP, this._cameraSystem.currentCamera, this._enemies);
+    }
   }
 
   _renderOffice(ctx, w, h) {
@@ -546,6 +444,7 @@ export class NightScene {
       powerPercent: this._powerSystem.getPowerPercent(),
       currentTime: this._clockSystem.displayTime,
       cameraActive: this._cameraSystem.isActive,
+      glitchedCamera: this._glitchMiniGame.glitchedCamera,
     });
   }
 
@@ -572,6 +471,10 @@ export class NightScene {
     }, 1000);
   }
 
+  _onGlitchFail() {
+    this._powerSystem.drain(CONFIG.CAMERA_GLITCH_POWER_PENALTY);
+  }
+
   _bindInput() {
     this._inputManager.on('pointerdown', (x, y) => {
       if (this._paused || this._gameOver || this._victory) return;
@@ -594,6 +497,7 @@ export class NightScene {
         if (this._cameraSystem.isActive) {
           this._cameraSystem.close();
         } else {
+          this._glitchMiniGame.onReturnToCamera();
           this._cameraSystem.open();
         }
         return;
@@ -633,14 +537,23 @@ export class NightScene {
         }
       }
 
-      // Camera map nodes
+      // Camera map nodes - can always switch cameras (leaves glitched camera)
       if (this._cameraSystem.isActive) {
+        // Always try glitch click first
+        const clickedNumber = this._glitchMiniGame.handleClick(x / w, y / h, w, h, this._cameraSystem.currentCamera);
+        if (clickedNumber) {
+          return;
+        }
+
         const nodes = this._hudSystem.getCameraMapNodes(w, h, ROOM_MAP);
         for (const node of nodes) {
           const dx = pos.x - node.x;
           const dy = pos.y - node.y;
           if (dx * dx + dy * dy <= node.r * node.r) {
             this._cameraSystem.switchTo(node.id);
+            if (this._glitchMiniGame.isActive && this._glitchMiniGame.glitchedCamera === this._cameraSystem.currentCamera) {
+              this._glitchMiniGame.onReturnToCamera();
+            }
             return;
           }
         }

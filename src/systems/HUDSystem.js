@@ -14,6 +14,7 @@ export class HUDSystem {
     this._currentTime = '12 AM';
     this._cameraActive = false;
     this._showCameraMap = false;
+    this._glitchedCamera = null;
   }
 
   /**
@@ -25,6 +26,7 @@ export class HUDSystem {
     if (state.currentTime !== undefined) this._currentTime = state.currentTime;
     if (state.cameraActive !== undefined) this._cameraActive = state.cameraActive;
     if (state.showCameraMap !== undefined) this._showCameraMap = state.showCameraMap;
+    if (state.glitchedCamera !== undefined) this._glitchedCamera = state.glitchedCamera;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -201,6 +203,7 @@ export class HUDSystem {
       const cy = toMapY(room.y);
       const isSelected = room.id === selectedCamera;
       const hasEnemy = enemies?.some(e => e.currentRoom === room.id && !e.isDefeated);
+      const isGlitched = this._glitchedCamera && room.id === this._glitchedCamera;
 
       const nodeR = 12;
 
@@ -213,18 +216,30 @@ export class HUDSystem {
         ctx.stroke();
       }
 
-      ctx.fillStyle = isSelected ? '#3a1010' : hasEnemy ? '#2a2a10' : '#0a1a0a';
-      ctx.beginPath();
-      ctx.arc(cx, cy, nodeR, 0, Math.PI * 2);
-      ctx.fill();
+      if (isGlitched) {
+        ctx.fillStyle = '#2a2a2a';
+        ctx.beginPath();
+        ctx.arc(cx, cy, nodeR, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#666666';
+        ctx.lineWidth = isSelected ? 2 : 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, nodeR, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        ctx.fillStyle = isSelected ? '#3a1010' : hasEnemy ? '#2a2a10' : '#0a1a0a';
+        ctx.beginPath();
+        ctx.arc(cx, cy, nodeR, 0, Math.PI * 2);
+        ctx.fill();
 
-      ctx.strokeStyle = isSelected ? '#cc2222' : hasEnemy ? '#aa8800' : '#3a7a3a';
-      ctx.lineWidth = isSelected ? 2 : 1;
-      ctx.beginPath();
-      ctx.arc(cx, cy, nodeR, 0, Math.PI * 2);
-      ctx.stroke();
+        ctx.strokeStyle = isSelected ? '#cc2222' : hasEnemy ? '#aa8800' : '#3a7a3a';
+        ctx.lineWidth = isSelected ? 2 : 1;
+        ctx.beginPath();
+        ctx.arc(cx, cy, nodeR, 0, Math.PI * 2);
+        ctx.stroke();
+      }
 
-      if (hasEnemy) {
+      if (hasEnemy && !isGlitched) {
         const blink = Math.sin(Date.now() * 0.008) > 0;
         if (blink) {
           ctx.fillStyle = '#ff4400';

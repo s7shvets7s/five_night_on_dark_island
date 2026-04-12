@@ -13,6 +13,30 @@ export const CONFIG = {
   GOD_MODE: false,
   MASK_DURATION: 10,
   MASK_COOLDOWN: 30,
+  CAMERA_GLITCH_POWER_PENALTY: 4,
+};
+
+export const CAMERA_GLITCH = {
+  CHECK_INTERVAL_MIN: 3,
+  CHECK_INTERVAL_MAX: 8,
+  BREAK_CHANCE: {
+    1: 0.15,
+    2: 0.15,
+    3: 0.20,
+    4: 0.25,
+    5: 0.30,
+    6: 0.35,
+    7: 0.40,
+  },
+  NUMBERS_COUNT: {
+    1: 3,
+    2: 3,
+    3: 4,
+    4: 4,
+    5: 5,
+    6: 5,
+    7: 5,
+  },
 };
 
 /** Game identity */
