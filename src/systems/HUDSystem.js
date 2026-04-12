@@ -47,6 +47,73 @@ export class HUDSystem {
   }
 
   /**
+   * Render mask button (called from NightScene).
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} w
+   * @param {number} h
+   * @param {boolean} maskActive
+   * @param {number} cooldown - seconds remaining on cooldown
+   */
+  renderMaskButton(ctx, w, h, maskActive, cooldown) {
+    this._drawMaskButton(ctx, w, h, maskActive, cooldown);
+  }
+
+  /**
+   * Render oxygen bar (called from NightScene).
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} w
+   * @param {number} h
+   * @param {number} oxygenLevel - seconds remaining (0-10)
+   */
+  renderOxygenBar(ctx, w, h, oxygenLevel) {
+    this._drawOxygenBar(ctx, w, h, oxygenLevel);
+  }
+
+  /**
+   * Render mask overlay on screen.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} w
+   * @param {number} h
+   */
+  renderMaskOverlay(ctx, w, h) {
+    const centerX = w / 2;
+    const centerY = h / 2;
+    const radius = Math.min(w, h) * 0.35;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+    ctx.clip();
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+    ctx.fillRect(0, 0, w, h);
+
+    const eyeWidth = radius * 0.35;
+    const eyeHeight = radius * 0.5;
+    const eyeY = centerY - radius * 0.15;
+    const leftEyeX = centerX - radius * 0.35;
+    const rightEyeX = centerX + radius * 0.35;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.95)';
+    ctx.beginPath();
+    ctx.ellipse(leftEyeX, eyeY, eyeWidth, eyeHeight, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(rightEyeX, eyeY, eyeWidth, eyeHeight, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#111111';
+    ctx.beginPath();
+    ctx.ellipse(leftEyeX, eyeY, eyeWidth * 0.7, eyeHeight * 0.7, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(rightEyeX, eyeY, eyeWidth * 0.7, eyeHeight * 0.7, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  /**
    * Render camera map overlay — FNAF 2 style: nodes + corridor lines.
    * @param {CanvasRenderingContext2D} ctx
    * @param {number} w
@@ -236,6 +303,61 @@ export class HUDSystem {
     ctx.fillText(this._cameraActive ? 'Close Camera' : 'Open Camera', x + btnW / 2, y + btnH / 2);
   }
 
+  _drawMaskButton(ctx, w, h, maskActive, cooldown) {
+    const bounds = this.getMaskButtonBounds(w, h);
+    const { x, y, w: btnW, h: btnH } = bounds;
+
+    let bgColor = COLORS.UI_BG;
+    let text = 'MASK';
+
+    if (maskActive) {
+      bgColor = '#00aa00';
+      text = 'REMOVE';
+    } else if (cooldown > 0) {
+      bgColor = '#666666';
+      text = `WAIT ${Math.ceil(cooldown)}`;
+    }
+
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(x, y, btnW, btnH);
+    ctx.strokeStyle = COLORS.UI_BORDER;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, btnW, btnH);
+
+    ctx.fillStyle = COLORS.TEXT_PRIMARY;
+    ctx.font = `${UI.FONT_BODY}px Courier New`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, x + btnW / 2, y + btnH / 2);
+  }
+
+  _drawOxygenBar(ctx, w, h, oxygenLevel) {
+    const barW = w * 0.6;
+    const barH = 12;
+    const barX = (w - barW) / 2;
+    const barY = 20;
+
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(barX - 2, barY - 2, barW + 4, barH + 4);
+
+    ctx.fillStyle = '#333333';
+    ctx.fillRect(barX, barY, barW, barH);
+
+    const oxygenWidth = (oxygenLevel / 10) * barW;
+    let barColor = '#00ff00';
+    if (oxygenLevel < 3) barColor = '#ff0000';
+    else if (oxygenLevel < 6) barColor = '#ffaa00';
+
+    ctx.fillStyle = barColor;
+    ctx.fillRect(barX, barY, oxygenWidth, barH);
+
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 10px Courier New';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('OXYGEN', w / 2, barY + barH / 2);
+  }
+
   _drawPauseButton(ctx, w, h) {
     const btnW = 44;
     const btnH = 44;
@@ -262,14 +384,11 @@ export class HUDSystem {
    * @returns {{x: number, y: number, w: number, h: number}}
    */
   getCameraToggleBounds(w, h) {
-    const btnW = 120;
-    const btnH = 44;
-    return {
-      x: (w - btnW) / 2,
-      y: h - btnH - UI.PADDING,
-      w: btnW,
-      h: btnH,
-    };
+    return this.getCameraButtonBounds(w, h);
+  }
+
+  getMaskToggleBounds(w, h) {
+    return this.getMaskButtonBounds(w, h);
   }
 
   /**
@@ -299,6 +418,34 @@ export class HUDSystem {
     const btnH = 44;
     const x = side === 'left' ? UI.PADDING : w - UI.PADDING - btnW;
     const y = h * 0.4 + UI.INTERACTIVE_MIN + 10;
+    return { x, y, w: btnW, h: btnH };
+  }
+
+  /**
+   * Get mask button bounds (next to camera button).
+   * @param {number} w
+   * @param {number} h
+   * @returns {{x: number, y: number, w: number, h: number}}
+   */
+  getMaskButtonBounds(w, h) {
+    const btnW = 120;
+    const btnH = 44;
+    const x = w - btnW - 20;
+    const y = h - btnH - 20;
+    return { x, y, w: btnW, h: btnH };
+  }
+
+  /**
+   * Get camera button bounds.
+   * @param {number} w
+   * @param {number} h
+   * @returns {{x: number, y: number, w: number, h: number}}
+   */
+  getCameraButtonBounds(w, h) {
+    const btnW = 120;
+    const btnH = 44;
+    const x = (w - btnW) / 2;
+    const y = h - btnH - UI.PADDING;
     return { x, y, w: btnW, h: btnH };
   }
 

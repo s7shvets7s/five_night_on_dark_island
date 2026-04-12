@@ -17,9 +17,10 @@ export class EnemyAI {
    * @param {Object} enemyDef - Enemy definition from enemies.js
    * @param {number} dt - Delta time in milliseconds
    * @param {Object} officeSystem - OfficeSystem instance
+   * @param {boolean} [maskActive] - Whether player has mask active
    * @returns {'moved'|'attacked'|'blocked'|null}
    */
-  update(enemy, enemyDef, dt, officeSystem) {
+  update(enemy, enemyDef, dt, officeSystem, maskActive = false) {
     if (enemy.isDefeated) return null;
 
     enemy.tickMoveTimer(dt);
@@ -42,7 +43,7 @@ export class EnemyAI {
 
     // Check if enemy is at door
     if (enemy.isAtOfficeDoor && enemyDef.canAttackFromDoor) {
-      return this._attemptAttack(enemy, enemyDef, officeSystem);
+      return this._attemptAttack(enemy, enemyDef, officeSystem, maskActive);
     }
 
     // Move towards office
@@ -86,14 +87,19 @@ export class EnemyAI {
    * @param {Enemy} enemy
    * @param {Object} enemyDef
    * @param {Object} officeSystem
+   * @param {boolean} [maskActive]
    * @returns {'attacked'|'blocked'}
    */
-  _attemptAttack(enemy, enemyDef, officeSystem) {
+  _attemptAttack(enemy, enemyDef, officeSystem, maskActive = false) {
     const isLeftDoor = enemy.currentRoom === 'dock';
     const doorClosed = isLeftDoor ? !officeSystem.leftDoorOpen : !officeSystem.rightDoorOpen;
 
     if (doorClosed) {
       enemy.defeat();
+      return 'blocked';
+    }
+
+    if (maskActive) {
       return 'blocked';
     }
 

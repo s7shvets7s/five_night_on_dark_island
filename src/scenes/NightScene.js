@@ -2,7 +2,7 @@
  * NightScene — main gameplay scene.
  * Manages office view, camera system, all game systems integration.
  */
-import { SCENES, COLORS, UI } from '../config/gameConfig.js';
+import { SCENES, COLORS, UI, CONFIG } from '../config/gameConfig.js';
 import { PowerSystem } from '../systems/PowerSystem.js';
 import { CameraSystem } from '../systems/CameraSystem.js';
 import { ClockSystem } from '../systems/ClockSystem.js';
@@ -59,6 +59,10 @@ export class NightScene {
     this._isPanning = false;
     this._panStartX = 0;
     this._panStartOffset = 0;
+
+    this._maskActive = false;
+    this._maskOxygen = 0;
+    this._maskCooldown = 0;
   }
 
   enter() {
@@ -77,6 +81,10 @@ export class NightScene {
 
     this._enemies = [];
     this._enemyStartHours = new Map();
+
+    this._maskActive = false;
+    this._maskOxygen = 0;
+    this._maskCooldown = 0;
 
     for (const spawn of this._nightConfig.spawns) {
       const def = ENEMY_MAP[spawn.enemyId];
@@ -147,7 +155,7 @@ export class NightScene {
         const def = ENEMY_MAP[enemy.id];
         if (!def) continue;
 
-        const result = this._enemyAI.update(enemy, def, dtMs, this._officeSystem);
+        const result = this._enemyAI.update(enemy, def, dtMs, this._officeSystem, this._maskActive);
         if (result === 'attacked') {
           enemy.defeat();
           this._onJumpscare(enemy);
@@ -158,6 +166,18 @@ export class NightScene {
 
     if (this._jumpscareSystem.isActive) {
       this._jumpscareSystem.update(dtMs);
+    }
+
+    if (this._maskActive) {
+      this._maskOxygen -= dt;
+      if (this._maskOxygen <= 0) {
+        this._maskActive = false;
+        this._maskOxygen = 0;
+        this._maskCooldown = CONFIG.MASK_COOLDOWN;
+      }
+    } else if (this._maskCooldown > 0) {
+      this._maskCooldown -= dt;
+      if (this._maskCooldown < 0) this._maskCooldown = 0;
     }
 
     this._updateHUD();
@@ -183,6 +203,12 @@ export class NightScene {
     }
 
     this._hudSystem.render(ctx, w, h);
+
+    if (this._maskActive) {
+      this._hudSystem.renderMaskOverlay(ctx, w, h);
+      this._hudSystem.renderOxygenBar(ctx, w, h, this._maskOxygen);
+    }
+    this._hudSystem.renderMaskButton(ctx, w, h, this._maskActive, this._maskCooldown);
 
     if (this._cameraSystem.isActive) {
       this._hudSystem.renderCameraMap(ctx, w, h, ROOM_MAP, this._cameraSystem.currentCamera, this._enemies);
@@ -245,7 +271,7 @@ export class NightScene {
         const def = ENEMY_MAP[enemy.id];
         if (!def) continue;
 
-        const result = this._enemyAI.update(enemy, def, dtMs, this._officeSystem);
+        const result = this._enemyAI.update(enemy, def, dtMs, this._officeSystem, this._maskActive);
         if (result === 'attacked') {
           enemy.defeat();
           this._onJumpscare(enemy);
@@ -256,6 +282,18 @@ export class NightScene {
 
     if (this._jumpscareSystem.isActive) {
       this._jumpscareSystem.update(dtMs);
+    }
+
+    if (this._maskActive) {
+      this._maskOxygen -= dt;
+      if (this._maskOxygen <= 0) {
+        this._maskActive = false;
+        this._maskOxygen = 0;
+        this._maskCooldown = CONFIG.MASK_COOLDOWN;
+      }
+    } else if (this._maskCooldown > 0) {
+      this._maskCooldown -= dt;
+      if (this._maskCooldown < 0) this._maskCooldown = 0;
     }
 
     this._updateHUD();
@@ -281,6 +319,12 @@ export class NightScene {
     }
 
     this._hudSystem.render(ctx, w, h);
+
+    if (this._maskActive) {
+      this._hudSystem.renderMaskOverlay(ctx, w, h);
+      this._hudSystem.renderOxygenBar(ctx, w, h, this._maskOxygen);
+    }
+    this._hudSystem.renderMaskButton(ctx, w, h, this._maskActive, this._maskCooldown);
 
     if (this._cameraSystem.isActive) {
       this._hudSystem.renderCameraMap(ctx, w, h, ROOM_MAP, this._cameraSystem.currentCamera, this._enemies);
@@ -551,6 +595,22 @@ export class NightScene {
           this._cameraSystem.close();
         } else {
           this._cameraSystem.open();
+        }
+        return;
+      }
+
+      // Mask toggle
+      const maskBounds = this._hudSystem.getMaskToggleBounds(w, h);
+      if (this._isInRect(pos, maskBounds)) {
+        if (this._maskCooldown > 0) {
+          return;
+        }
+        if (this._maskActive) {
+          this._maskActive = false;
+          this._maskOxygen = 0;
+        } else {
+          this._maskActive = true;
+          this._maskOxygen = 10;
         }
         return;
       }

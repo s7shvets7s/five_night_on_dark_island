@@ -11,6 +11,8 @@ export const CONFIG = {
   AUTO_WIN_FOR_TEST: false,
   DISABLE_ADS: true,
   GOD_MODE: false,
+  MASK_DURATION: 10,
+  MASK_COOLDOWN: 30,
 };
 
 /** Game identity */
