@@ -7,9 +7,11 @@ export class CameraSystem {
   /**
    * @param {Object} deps
    * @param {EventBus} deps.eventBus
+   * @param {Object} [deps.assetLoader] - AssetLoader instance for camera images
    */
-  constructor({ eventBus }) {
+  constructor({ eventBus, assetLoader }) {
     this._eventBus = eventBus;
+    this._assetLoader = assetLoader;
     this._isActive = false;
     this._currentCamera = null;
     this._staticNoise = 0.3;
@@ -40,6 +42,28 @@ export class CameraSystem {
     this._eventBus.emit('camera:switch', { cameraId });
   }
 
+  /**
+   * Switch to next camera.
+   * @param {string[]} cameraIds - List of all camera IDs
+   */
+  nextCamera(cameraIds) {
+    if (!this._isActive || !cameraIds?.length) return;
+    const idx = cameraIds.indexOf(this._currentCamera);
+    const nextIdx = (idx + 1) % cameraIds.length;
+    this.switchTo(cameraIds[nextIdx]);
+  }
+
+  /**
+   * Switch to previous camera.
+   * @param {string[]} cameraIds - List of all camera IDs
+   */
+  prevCamera(cameraIds) {
+    if (!this._isActive || !cameraIds?.length) return;
+    const idx = cameraIds.indexOf(this._currentCamera);
+    const prevIdx = (idx - 1 + cameraIds.length) % cameraIds.length;
+    this.switchTo(cameraIds[prevIdx]);
+  }
+
   /** @returns {boolean} */
   get isActive() { return this._isActive; }
 
@@ -64,14 +88,27 @@ export class CameraSystem {
     ctx.fillRect(0, 0, w, h);
 
     const room = rooms?.[cameraId];
-    if (room) {
-      this._drawRoom(ctx, w, h, room, rooms);
-      ctx.fillStyle = '#44aa44';
-      ctx.font = 'bold 20px Courier New';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'top';
-      ctx.fillText(`CAM: ${room.name}`, 20, 20);
+    const cameraImageKey = `cameras_${cameraId}`;
+    const cameraImage = this._assetLoader?.getImage(cameraImageKey);
+
+    const camX = w * 0.15;
+    const camY = h * 0.2;
+    const camW = w * 0.7;
+    const camH = h * 0.6;
+
+    if (cameraImage && cameraImage.complete && cameraImage.naturalWidth > 0) {
+      ctx.drawImage(cameraImage, camX, camY, camW, camH);
+      
+      this._drawCameraNoise(ctx, camX, camY, camW, camH);
+    } else if (room) {
+      this._drawRoom(ctx, camX, camY, camW, camH, room, rooms);
     }
+
+    ctx.fillStyle = '#44aa44';
+    ctx.font = 'bold 20px Courier New';
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(`CAM: ${room?.name || cameraId}`, 20, 20);
 
     if (enemies) {
       for (const enemy of enemies) {
@@ -84,16 +121,44 @@ export class CameraSystem {
     this._drawStatic(ctx, w, h);
   }
 
-  _drawRoom(ctx, w, h, room, allRooms) {
-    const cx = w * 0.5;
-    const cy = h * 0.55;
+  _drawCameraNoise(ctx, x, y, w, h) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    ctx.clip();
+
+    for (let i = 0; i < 15; i++) {
+      const ny = y + Math.random() * h;
+      const nh = Math.random() * 3 + 1;
+      ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.15})`;
+      ctx.fillRect(x, ny, w, nh);
+    }
+
+    if (Math.random() < 0.08) {
+      const glitchY = y + Math.random() * h;
+      const glitchH = Math.random() * 20 + 5;
+      const offset = (Math.random() - 0.5) * 30;
+      ctx.drawImage(ctx.canvas, x, glitchY, w, glitchH, x + offset, glitchY, w, glitchH);
+    }
+
+    if (Math.random() < 0.05) {
+      ctx.fillStyle = `rgba(${Math.random() > 0.5 ? '255,0,0' : '0,0,255'}, ${Math.random() * 0.1})`;
+      ctx.fillRect(x + Math.random() * w * 0.5, y + Math.random() * h * 0.5, w * 0.3, h * 0.2);
+    }
+
+    ctx.restore();
+  }
+
+  _drawRoom(ctx, x, y, w, h, room, allRooms) {
+    const cx = x + w / 2;
+    const cy = y + h / 2;
 
     ctx.fillStyle = '#1a2a1a';
-    ctx.fillRect(w * 0.15, h * 0.2, w * 0.7, h * 0.6);
+    ctx.fillRect(x, y, w, h);
 
     ctx.strokeStyle = '#2a4a2a';
     ctx.lineWidth = 2;
-    ctx.strokeRect(w * 0.15, h * 0.2, w * 0.7, h * 0.6);
+    ctx.strokeRect(x, y, w, h);
 
     ctx.fillStyle = '#335533';
     ctx.font = '14px Courier New';

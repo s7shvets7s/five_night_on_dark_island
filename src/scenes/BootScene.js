@@ -51,13 +51,29 @@ export class BootScene {
    * @param {number} h - Current game height
    */
   render(ctx, w, h) {
+    const fw = Number(w);
+    const fh = Number(h);
+    const cx = fw / 2;
+    const cy = fh / 2;
+    if (!isFinite(fw) || !isFinite(fh) || !isFinite(cx) || !isFinite(cy) || fw < 1 || fh < 1) {
+      console.log('[BootScene] Invalid dims:', w, h, cx, cy);
+      return;
+    }
+
     // Background
     ctx.fillStyle = '#0a0a0a';
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(0, 0, fw, fh);
 
     // Subtle vignette
-    const maxDim = Math.max(w, h);
-    const gradient = ctx.createRadialGradient(w / 2, h / 2, maxDim * 0.3, w / 2, h / 2, maxDim * 0.7);
+    const maxDim = Math.max(fw, fh);
+    const innerR = maxDim * 0.3;
+    const outerR = maxDim * 0.7;
+    if (!isFinite(innerR) || !isFinite(outerR)) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+      ctx.fillRect(0, 0, fw, fh);
+      return;
+    }
+    const gradient = ctx.createRadialGradient(cx, cy, innerR, cx, cy, outerR);
     gradient.addColorStop(0, 'transparent');
     gradient.addColorStop(1, 'rgba(0, 0, 0, 0.6)');
     ctx.fillStyle = gradient;

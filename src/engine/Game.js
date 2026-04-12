@@ -124,13 +124,21 @@ export class Game {
   /** Per-frame render — delegates to active scene */
   _render() {
     const ctx = this._ctx;
+    const cw = this._canvas.width;
+    const ch = this._canvas.height;
+    const gw = this._gameWidth;
+    const gh = this._gameHeight;
+
+    if (!gw || !gh || gw < 1 || gh < 1 || !isFinite(gw) || !isFinite(gh)) {
+      return;
+    }
 
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, this._canvas.width, this._canvas.height);
+    ctx.clearRect(0, 0, cw, ch);
 
     try {
-      this._sceneManager.render(ctx, this._gameWidth, this._gameHeight);
+      this._sceneManager.render(ctx, gw, gh);
     } catch (e) {
       console.error('[Game] Render error:', e);
     }

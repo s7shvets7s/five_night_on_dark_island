@@ -24,16 +24,18 @@ export class NightScene {
    * @param {Function} [deps.onPause]
    * @param {Object} deps.inputManager
    * @param {Object} [deps.audioManager]
+   * @param {Object} [deps.assetLoader]
    * @param {number} [deps.nightId]
    */
-  constructor({ onSceneChange, onPause, inputManager, audioManager, nightId }) {
+  constructor({ onSceneChange, onPause, inputManager, audioManager, assetLoader, nightId }) {
     this._onSceneChange = onSceneChange;
     this._onPause = onPause;
     this._inputManager = inputManager;
     this._audioManager = audioManager;
+    this._assetLoader = assetLoader;
 
     this._powerSystem = new PowerSystem({ eventBus });
-    this._cameraSystem = new CameraSystem({ eventBus });
+    this._cameraSystem = new CameraSystem({ eventBus, assetLoader: this._assetLoader });
     this._clockSystem = new ClockSystem({ eventBus });
     this._officeSystem = new OfficeSystem({ eventBus });
     this._jumpscareSystem = new JumpscareSystem({ eventBus });
@@ -310,52 +312,27 @@ export class NightScene {
     const officeW = w * 1.3;
     const officeX = (w - officeW) / 2;
 
-    ctx.fillStyle = '#222';
-    ctx.fillRect(officeX + w * 0.05, h * 0.08, officeW * 0.9, h * 0.72);
+    const leftClosed = !this._officeSystem.leftDoorOpen;
+    const rightClosed = !this._officeSystem.rightDoorOpen;
 
-    ctx.fillStyle = '#333';
-    ctx.fillRect(officeX + w * 0.3, h * 0.5, officeW * 0.4, h * 0.15);
-
-    ctx.fillStyle = '#444';
-    ctx.beginPath();
-    ctx.arc(officeX + w * 0.5, h * 0.45, 20, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#555';
-    ctx.fillRect(officeX + w * 0.35, h * 0.48, 8, 12);
-    ctx.fillRect(officeX + w * 0.55, h * 0.47, 6, 14);
-
-    ctx.fillStyle = '#666';
-    ctx.beginPath();
-    ctx.arc(officeX + w * 0.65, h * 0.42, 15, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = '#777';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(officeX + w * 0.65, h * 0.42);
-    ctx.lineTo(officeX + w * 0.65, h * 0.3);
-    ctx.stroke();
-
-    ctx.fillStyle = '#111';
-    ctx.fillRect(officeX + w * 0.02, h * 0.15, w * 0.08, h * 0.55);
-    ctx.fillRect(officeX + w * 0.9, h * 0.15, w * 0.08, h * 0.55);
-
-    ctx.strokeStyle = '#444';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(officeX + w * 0.02, h * 0.15, w * 0.08, h * 0.55);
-    ctx.strokeRect(officeX + w * 0.9, h * 0.15, w * 0.08, h * 0.55);
-
-    this._renderDoorState(ctx, 'left', officeX, w, h);
-    this._renderDoorState(ctx, 'right', officeX, w, h);
-
-    if (this._officeSystem.leftLightOn) {
-      this._renderLightEffect(ctx, 'left', officeX, w, h);
-      this._renderEnemyAtDoor(ctx, 'left', officeX, w, h);
+    let bgKey = 'office_bg';
+    if (leftClosed && rightClosed) {
+      bgKey = 'office_bg_all_dors_close';
+    } else if (leftClosed) {
+      bgKey = 'office_bg_left_dor_close';
+    } else if (rightClosed) {
+      bgKey = 'office_bg_right_dor_slose';
     }
-    if (this._officeSystem.rightLightOn) {
-      this._renderLightEffect(ctx, 'right', officeX, w, h);
-      this._renderEnemyAtDoor(ctx, 'right', officeX, w, h);
+
+    const bgImage = this._assetLoader?.getImage(bgKey);
+    if (bgImage && bgImage.complete && bgImage.naturalWidth > 0) {
+      ctx.drawImage(bgImage, officeX, 0, officeW, h);
+    } else {
+      ctx.fillStyle = '#222';
+      ctx.fillRect(officeX, 0, officeW, h);
     }
+
+    this._renderDoorEnemies(ctx, officeX, w, h, leftClosed, rightClosed);
 
     ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
     ctx.font = '10px Courier New';
@@ -363,6 +340,22 @@ export class NightScene {
     ctx.fillText('◄ ►', w / 2, h - 8);
 
     ctx.restore();
+  }
+
+  _renderDoorEnemies(ctx, officeX, w, h, leftClosed, rightClosed) {
+    const leftDoorRoom = 'dock';
+    const rightDoorRoom = 'generator';
+
+    for (const enemy of this._enemies) {
+      if (enemy.isDefeated) continue;
+
+      if (enemy.currentRoom === leftDoorRoom && !leftClosed) {
+        this._renderEnemyAtDoor(ctx, 'left', officeX, w, h);
+      }
+      if (enemy.currentRoom === rightDoorRoom && !rightClosed) {
+        this._renderEnemyAtDoor(ctx, 'right', officeX, w, h);
+      }
+    }
   }
 
   _renderDoorState(ctx, side, officeX, w, h) {

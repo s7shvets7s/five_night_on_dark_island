@@ -16,16 +16,18 @@
  */
 
 /** @type {Room[]} */
+console.log('[rooms.js] ROOMS count:', 10);
 export const ROOMS = [
   { id: 'office', name: 'Security Office', connections: ['dock', 'generator'], x: 0.5, y: 0.88, isOffice: true, isBlindSpot: false },
   { id: 'helipad', name: 'Helipad', connections: ['golden_temple'], x: 0.5, y: 0.05, isOffice: false, isBlindSpot: false },
   { id: 'golden_temple', name: 'Golden Temple', connections: ['helipad', 'staff_quarters', 'greenhouse'], x: 0.5, y: 0.18, isOffice: false, isBlindSpot: false },
-  { id: 'staff_quarters', name: 'Staff Quarters', connections: ['golden_temple', 'guest_house'], x: 0.2, y: 0.32, isOffice: false, isBlindSpot: false },
-  { id: 'greenhouse', name: 'Greenhouse', connections: ['golden_temple', 'beach_house'], x: 0.8, y: 0.32, isOffice: false, isBlindSpot: false },
-  { id: 'guest_house', name: 'Guest House', connections: ['staff_quarters', 'dock'], x: 0.2, y: 0.52, isOffice: false, isBlindSpot: false },
+  { id: 'staff_quarters', name: 'Staff Quarters', connections: ['golden_temple', 'guest_house', 'central_street'], x: 0.2, y: 0.32, isOffice: false, isBlindSpot: false },
+  { id: 'greenhouse', name: 'Greenhouse', connections: ['golden_temple', 'beach_house', 'central_street'], x: 0.8, y: 0.32, isOffice: false, isBlindSpot: false },
+  { id: 'guest_house', name: 'Guest House', connections: ['staff_quarters', 'dock', 'central_street'], x: 0.2, y: 0.52, isOffice: false, isBlindSpot: false },
   { id: 'beach_house', name: 'Beach House', connections: ['greenhouse', 'generator'], x: 0.8, y: 0.52, isOffice: false, isBlindSpot: false },
   { id: 'dock', name: 'Main Dock', connections: ['guest_house', 'office'], x: 0.2, y: 0.72, isOffice: false, isBlindSpot: true },
   { id: 'generator', name: 'Generator', connections: ['beach_house', 'office'], x: 0.8, y: 0.72, isOffice: false, isBlindSpot: true },
+  { id: 'central_street', name: 'Central Street', connections: ['staff_quarters', 'guest_house', 'greenhouse', 'office'], x: 0.5, y: 0.58, isOffice: false, isBlindSpot: false },
 ];
 
 /** @type {Record<string, Room>} - Quick lookup by ID */

@@ -22,7 +22,7 @@ export const ENEMIES = [
     id: 'bonnie',
     name: 'Bonnie',
     color: '#6644aa',
-    preferredPath: ['helipad', 'golden_temple', 'staff_quarters', 'guest_house', 'dock'],
+    preferredPath: ['helipad', 'golden_temple', 'staff_quarters', 'central_street', 'guest_house', 'dock'],
     moveIntervalMs: 8000,
     moveIntervalVariance: 4000,
     canAttackFromDoor: true,

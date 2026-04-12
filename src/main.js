@@ -23,6 +23,27 @@ function bootstrap() {
   const game = new Game(canvas);
   const audioManager = new AudioManager();
 
+  const cameraImages = {
+    cameras_helipad: 'cameras/helipad.png',
+    cameras_golden_temple: 'cameras/golden_temple.png',
+    cameras_staff_quarters: 'cameras/staff_quarters.png',
+    cameras_guest_house: 'cameras/guest_house.png',
+    cameras_greenhouse: 'cameras/greenhouse.png',
+    cameras_beach_house: 'cameras/beach_house.png',
+    cameras_dock: 'cameras/dock.png',
+    cameras_central_street: 'cameras/central_street.png',
+    office_bg: 'office/office_bg.png',
+    office_bg_left_dor_close: 'office/office_bg_left_dor_close.png',
+    office_bg_right_dor_slose: 'office/office_bg_right_dor_slose.png',
+    office_bg_all_dors_close: 'office/office_bg_all_dors_close.png',
+  };
+  game.assetLoader.queueImages(cameraImages);
+  game.assetLoader.loadAll().then(() => {
+    console.log('[Bootstrap] Assets loaded');
+  }).catch(() => {
+    console.log('[Bootstrap] Assets load error (using placeholders)');
+  });
+
   let currentNightId = 1;
 
   function createNightScene(nightId) {
@@ -31,6 +52,7 @@ function bootstrap() {
       onPause: () => game.sceneManager.push(SCENES.PAUSE),
       inputManager: game.inputManager,
       audioManager,
+      assetLoader: game.assetLoader,
       nightId,
     });
   }

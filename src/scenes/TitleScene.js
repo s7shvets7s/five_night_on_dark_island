@@ -50,17 +50,21 @@ export class TitleScene {
    * @param {number} h - Current game height
    */
   render(ctx, w, h) {
+    const fw = Number(w);
+    const fh = Number(h);
+    if (!isFinite(fw) || !isFinite(fh) || fw < 1 || fh < 1) return;
+
     // Background
     ctx.fillStyle = '#0a0a0a';
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(0, 0, fw, fh);
 
     // Vignette
-    const maxDim = Math.max(w, h);
-    const vignette = ctx.createRadialGradient(w / 2, h / 2, maxDim * 0.2, w / 2, h / 2, maxDim * 0.8);
+    const maxDim = Math.max(fw, fh);
+    const vignette = ctx.createRadialGradient(fw / 2, fh / 2, maxDim * 0.2, fw / 2, fh / 2, maxDim * 0.8);
     vignette.addColorStop(0, 'rgba(20, 0, 0, 0.1)');
     vignette.addColorStop(1, 'rgba(0, 0, 0, 0.7)');
     ctx.fillStyle = vignette;
-    ctx.fillRect(0, 0, w, h);
+    ctx.fillRect(0, 0, fw, fh);
 
     // Title
     const fontSizeTitle = Math.min(48, h * 0.067);

@@ -90,7 +90,7 @@ export class HUDSystem {
 
       for (const connId of room.connections) {
         const conn = rooms[connId];
-        if (!conn || conn.isOffice) continue;
+        if (!conn) continue;
 
         const edgeKey = [room.id, connId].sort().join('-');
         if (drawn.has(edgeKey)) continue;
@@ -107,6 +107,26 @@ export class HUDSystem {
         ctx.lineTo(nx, ny);
         ctx.stroke();
       }
+    }
+
+    const office = rooms['office'];
+    if (office) {
+      const ox = toMapX(office.x);
+      const oy = toMapY(office.y);
+
+      ctx.fillStyle = '#1a1a2a';
+      ctx.beginPath();
+      ctx.arc(ox, oy, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#4a4a6a';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = '#8888aa';
+      ctx.font = 'bold 8px Courier New';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText('OFFICE', ox, oy + 16);
     }
 
     for (const room of roomsArr) {
@@ -309,6 +329,7 @@ export class HUDSystem {
     const toMapY = (ry) => mapY + UI.PADDING + ry * (mapH - UI.PADDING * 2 - 24);
 
     const nodes = [];
+    console.log('[HUDSystem] Rooms for map:', Object.keys(rooms));
     for (const room of Object.values(rooms)) {
       if (room.isOffice) continue;
       nodes.push({
@@ -318,6 +339,7 @@ export class HUDSystem {
         r: 18,
       });
     }
+    console.log('[HUDSystem] Map nodes:', nodes.map(n => n.id));
     return nodes;
   }
 }
