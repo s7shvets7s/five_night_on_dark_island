@@ -3,6 +3,7 @@
  */
 import { SCENES, COLORS, UI } from '../config/gameConfig.js';
 import { Renderer } from '../engine/Renderer.js';
+import { i18n } from '../i18n/index.js';
 
 export class PauseScene {
   /**
@@ -55,14 +56,18 @@ export class PauseScene {
     ctx.font = `bold ${fontSizeSub}px Courier New`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    ctx.fillText('PAUSED', w / 2, boxY + UI.PADDING);
+    ctx.fillText(i18n.t('pauseTitle'), w / 2, boxY + UI.PADDING);
 
     // Buttons
     this._buttons = [];
     const btnW = boxW * 0.7;
     const btnH = Math.max(44, h * 0.06);
     const btnX = (w - btnW) / 2;
-    const labels = ['Resume', 'Restart Night', 'Quit to Title'];
+    const labels = [
+      i18n.t('pauseResume'),
+      i18n.t('pauseRestart'),
+      i18n.t('pauseQuit'),
+    ];
 
     labels.forEach((label, i) => {
       const btnY = boxY + UI.PADDING + 50 + i * (btnH + 12);
@@ -86,7 +91,7 @@ export class PauseScene {
   }
 
   _bindInput() {
-    this._inputManager.onPointerDown(({ x, y }) => {
+    this._inputManager.on('pointerdown', (x, y) => {
       for (const btn of this._buttons) {
         if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
           this._handleButtonClick(btn.label);
@@ -97,18 +102,14 @@ export class PauseScene {
   }
 
   _handleButtonClick(label) {
-    switch (label) {
-      case 'Resume':
-        if (this._onResume) {
-          this._onResume();
-        }
-        break;
-      case 'Restart Night':
-        this._onSceneChange(SCENES.NIGHT);
-        break;
-      case 'Quit to Title':
-        this._onSceneChange(SCENES.TITLE);
-        break;
+    if (label === i18n.t('pauseResume')) {
+      if (this._onResume) {
+        this._onResume();
+      }
+    } else if (label === i18n.t('pauseRestart')) {
+      this._onSceneChange(SCENES.NIGHT);
+    } else if (label === i18n.t('pauseQuit')) {
+      this._onSceneChange(SCENES.TITLE);
     }
   }
 }

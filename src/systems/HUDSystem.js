@@ -2,6 +2,7 @@
  * HUDSystem — renders the game HUD overlay.
  */
 import { COLORS, UI } from '../config/gameConfig.js';
+import { i18n } from '../i18n/index.js';
 
 export class HUDSystem {
   /**
@@ -147,7 +148,7 @@ export class HUDSystem {
     ctx.font = 'bold 10px Courier New';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.fillText('CAMERAS', mapX + UI.PADDING, mapY + 5);
+    ctx.fillText(i18n.t('camerasLabel'), mapX + UI.PADDING, mapY + 5);
 
     const drawn = new Set();
 
@@ -195,7 +196,7 @@ export class HUDSystem {
       ctx.font = 'bold 8px Courier New';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillText('OFFICE', ox, oy + 16);
+      ctx.fillText(i18n.t('officeLabel'), ox, oy + 16);
     }
 
     for (const room of roomsArr) {
@@ -276,7 +277,7 @@ export class HUDSystem {
     ctx.font = `${UI.FONT_SMALL}px Courier New`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'bottom';
-    ctx.fillText('Power', x, y - 4);
+    ctx.fillText(i18n.t('hudPower'), x, y - 4);
 
     ctx.fillStyle = '#1a1a1a';
     ctx.fillRect(x, y, barW, barH);
@@ -315,7 +316,7 @@ export class HUDSystem {
     ctx.font = `${UI.FONT_BODY}px Courier New`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(this._cameraActive ? 'Close Camera' : 'Open Camera', x + btnW / 2, y + btnH / 2);
+    ctx.fillText(this._cameraActive ? i18n.t('hudCloseCamera') : i18n.t('hudOpenCamera'), x + btnW / 2, y + btnH / 2);
   }
 
   _drawMaskButton(ctx, w, h, maskActive, cooldown) {
@@ -323,14 +324,14 @@ export class HUDSystem {
     const { x, y, w: btnW, h: btnH } = bounds;
 
     let bgColor = COLORS.UI_BG;
-    let text = 'MASK';
+    let text = i18n.t('hudMask');
 
     if (maskActive) {
       bgColor = '#00aa00';
-      text = 'REMOVE';
+      text = i18n.t('hudMaskRemove');
     } else if (cooldown > 0) {
       bgColor = '#666666';
-      text = `WAIT ${Math.ceil(cooldown)}`;
+      text = `${i18n.t('hudMaskWait')} ${Math.ceil(cooldown)}`;
     }
 
     ctx.fillStyle = bgColor;
@@ -370,7 +371,7 @@ export class HUDSystem {
     ctx.font = 'bold 10px Courier New';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('OXYGEN', w / 2, barY + barH / 2);
+    ctx.fillText(i18n.t('oxygenLabel'), w / 2, barY + barH / 2);
   }
 
   _drawPauseButton(ctx, w, h) {

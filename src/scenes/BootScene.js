@@ -1,4 +1,5 @@
 import { SCENES } from '../config/gameConfig.js';
+import { i18n } from '../i18n/index.js';
 
 /**
  * BootScene — initial loading scene.
@@ -91,7 +92,7 @@ export class BootScene {
     const fontSizeSmall = Math.min(16, h * 0.022);
     ctx.fillStyle = '#666';
     ctx.font = `${fontSizeSmall}px Courier New`;
-    ctx.fillText('LOADING...', w / 2, h * 0.48);
+    ctx.fillText(i18n.t('bootLoading'), w / 2, h * 0.48);
 
     // Progress bar background
     const barWidth = w * 0.4;

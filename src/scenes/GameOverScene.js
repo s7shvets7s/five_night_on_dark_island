@@ -5,6 +5,7 @@ import { SCENES, COLORS, UI } from '../config/gameConfig.js';
 import { Renderer } from '../engine/Renderer.js';
 import { eventBus } from '../engine/EventBus.js';
 import { DEFAULT_NIGHT_ID } from '../data/nights.js';
+import { i18n } from '../i18n/index.js';
 
 export class GameOverScene {
   constructor({ baseWidth, baseHeight, onSceneChange, inputManager }) {
@@ -55,12 +56,12 @@ export class GameOverScene {
     ctx.font = `bold ${fontSizeTitle}px Courier New`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('GAME OVER', w / 2, h * 0.35);
+    ctx.fillText(i18n.t('gameOverTitle'), w / 2, h * 0.35);
 
     const fontSizeSub = Math.min(UI.FONT_SUBTITLE, h * 0.025);
     ctx.fillStyle = COLORS.TEXT_SECONDARY;
     ctx.font = `${fontSizeSub}px Courier New`;
-    ctx.fillText('The night was not kind to you.', w / 2, h * 0.48);
+    ctx.fillText(i18n.t('gameOverSubtitle'), w / 2, h * 0.48);
 
     if (this._canInteract) {
       const pulse = 0.5 + Math.sin(Date.now() * 0.003) * 0.5;
@@ -68,7 +69,7 @@ export class GameOverScene {
       const fontSizeBody = Math.min(UI.FONT_BODY, h * 0.019);
       ctx.fillStyle = COLORS.TEXT_PRIMARY;
       ctx.font = `${fontSizeBody}px Courier New`;
-      ctx.fillText('Click to try again', w / 2, h * 0.65);
+      ctx.fillText(i18n.t('gameOverRetry'), w / 2, h * 0.65);
     }
 
     ctx.globalAlpha = 1;
@@ -78,7 +79,7 @@ export class GameOverScene {
   }
 
   _bindInput() {
-    this._inputManager.onPointerDown(() => {
+    this._inputManager.on('pointerdown', () => {
       if (this._canInteract) {
         eventBus.emit('game:night-change', { nightId: this._retryNightId });
         this._onSceneChange(SCENES.NIGHT);

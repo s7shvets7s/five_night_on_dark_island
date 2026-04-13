@@ -5,6 +5,7 @@ import { SCENES, COLORS, UI } from '../config/gameConfig.js';
 import { Renderer } from '../engine/Renderer.js';
 import { NIGHT_MAP, DEFAULT_NIGHT_ID } from '../data/nights.js';
 import { eventBus } from '../engine/EventBus.js';
+import { i18n } from '../i18n/index.js';
 
 export class VictoryScene {
   /**
@@ -66,20 +67,20 @@ export class VictoryScene {
     ctx.font = `bold ${fontSizeTitle}px Courier New`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('6 AM', w / 2, h * 0.3);
+    ctx.fillText(i18n.t('victoryTitle'), w / 2, h * 0.3);
 
     // Night complete
     const nightName = NIGHT_MAP[this._nightId]?.name || `Night ${this._nightId}`;
     const fontSizeSub = Math.min(UI.FONT_SUBTITLE, h * 0.025);
     ctx.fillStyle = COLORS.POWER_OK;
     ctx.font = `${fontSizeSub}px Courier New`;
-    ctx.fillText(`${nightName} Complete!`, w / 2, h * 0.45);
+    ctx.fillText(`${nightName} ${i18n.t('victoryComplete')}`, w / 2, h * 0.45);
 
     // Cheer
     const fontSizeBody = Math.min(UI.FONT_BODY, h * 0.019);
     ctx.fillStyle = COLORS.TEXT_SECONDARY;
     ctx.font = `${fontSizeBody}px Courier New`;
-    ctx.fillText('You survived another night.', w / 2, h * 0.55);
+    ctx.fillText(i18n.t('victorySurvived'), w / 2, h * 0.55);
 
     // Continue prompt
     if (this._canInteract) {
@@ -88,7 +89,7 @@ export class VictoryScene {
       ctx.fillStyle = COLORS.TEXT_PRIMARY;
       ctx.font = `${fontSizeBody}px Courier New`;
       const nextNight = Math.min(this._nightId + 1, 7);
-      ctx.fillText(`Click for ${NIGHT_MAP[nextNight]?.name || 'Next Night'}`, w / 2, h * 0.7);
+      ctx.fillText(`${i18n.t('victoryClickFor')} ${NIGHT_MAP[nextNight]?.name || 'Next Night'}`, w / 2, h * 0.7);
     }
 
     ctx.globalAlpha = 1;
@@ -98,7 +99,7 @@ export class VictoryScene {
   }
 
   _bindInput() {
-    this._inputManager.onPointerDown(() => {
+    this._inputManager.on('pointerdown', () => {
       if (this._canInteract) {
         eventBus.emit('game:night-change', { nightId: this._nextNight });
         this._onSceneChange(SCENES.NIGHT);

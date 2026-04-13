@@ -2,7 +2,7 @@
  * NightScene — main gameplay scene.
  * Manages office view, camera system, all game systems integration.
  */
-import { SCENES, COLORS, UI, CONFIG } from '../config/gameConfig.js';
+import { SCENES, COLORS, UI, CONFIG, gameState } from '../config/gameConfig.js';
 import { ENEMY_CONFIG, ENEMY_MAP, DOOR_POSITIONS_PERCENT, DOOR_IMAGE_SIZE } from '../config/enemyConfig.js';
 import { PowerSystem } from '../systems/PowerSystem.js';
 import { CameraSystem } from '../systems/CameraSystem.js';
@@ -18,6 +18,7 @@ import { ROOM_MAP } from '../data/rooms.js';
 import { NIGHT_MAP, DEFAULT_NIGHT_ID } from '../data/nights.js';
 import { eventBus } from '../engine/EventBus.js';
 import { Renderer } from '../engine/Renderer.js';
+import { i18n } from '../i18n/index.js';
 
 export class NightScene {
   /**
@@ -447,7 +448,7 @@ export class NightScene {
       ctx.font = `${UI.FONT_BODY}px Courier New`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(isClosed ? 'DOOR' : 'OPEN', bounds.x + bounds.w / 2, bounds.y + bounds.h / 2);
+      ctx.fillText(isClosed ? i18n.t('hudDoor') : i18n.t('hudDoorOpen'), bounds.x + bounds.w / 2, bounds.y + bounds.h / 2);
     }
   }
 
@@ -466,7 +467,7 @@ export class NightScene {
       ctx.font = `${UI.FONT_BODY}px Courier New`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('LIGHT', bounds.x + bounds.w / 2, bounds.y + bounds.h / 2);
+      ctx.fillText(i18n.t('hudLight'), bounds.x + bounds.w / 2, bounds.y + bounds.h / 2);
     }
   }
 
@@ -477,14 +478,14 @@ export class NightScene {
 
     let bgColor = COLORS.UI_BG;
     let textColor = COLORS.TEXT_PRIMARY;
-    let text = 'GENERATOR';
+    let text = i18n.t('hudGenerator');
     let borderColor = COLORS.UI_BORDER;
     let lineWidth = 2;
 
     if (isShowingMenu) {
       bgColor = '#44aa44';
       textColor = '#000000';
-      text = 'ROTATE >>';
+      text = i18n.t('hudGeneratorRotate');
       borderColor = '#44ff44';
       lineWidth = 3;
     } else if (isActive) {
@@ -492,11 +493,11 @@ export class NightScene {
       const blink = Math.sin(Date.now() / 1000 * Math.PI * 2 * blinkRate) > 0;
       bgColor = blink ? '#ffaa00' : COLORS.UI_BG;
       textColor = blink ? '#000000' : '#ffaa00';
-      text = 'TAP NOW!';
+      text = i18n.t('hudGeneratorTap');
       borderColor = '#ffaa00';
       lineWidth = 3;
     } else {
-      text = 'GENERATOR OK';
+      text = i18n.t('hudGeneratorOk');
       textColor = '#44aa44';
     }
 
@@ -535,8 +536,8 @@ export class NightScene {
       ctx.font = 'bold 20px Courier New';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('ПОЛНЫЙ', center.x, center.y - 20);
-      ctx.fillText('ЗАРЯД', center.x, center.y + 10);
+      ctx.fillText(i18n.t('hudGeneratorFull'), center.x, center.y - 20);
+      ctx.fillText(i18n.t('hudGeneratorCharge'), center.x, center.y + 10);
 
       ctx.beginPath();
       ctx.arc(center.x, center.y, radius, 0, Math.PI * 2);
@@ -546,7 +547,7 @@ export class NightScene {
 
       ctx.fillStyle = '#888888';
       ctx.font = '14px Courier New';
-      ctx.fillText('CLICK TO CLOSE', center.x, center.y + radius + 30);
+      ctx.fillText(i18n.t('hudGeneratorClickClose'), center.x, center.y + radius + 30);
       return;
     }
 
@@ -577,7 +578,7 @@ export class NightScene {
     ctx.font = 'bold 16px Courier New';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(direction === 'CW' ? 'CLOCKWISE' : 'COUNTER-CW', center.x, center.y - radius - 25);
+    ctx.fillText(direction === 'CW' ? i18n.t('hudGeneratorClockwise') : i18n.t('hudGeneratorCounterCw'), center.x, center.y - radius - 25);
 
     ctx.fillStyle = timeLeft < 1.5 ? '#ff4444' : '#ffffff';
     ctx.font = 'bold 24px Courier New';
@@ -621,6 +622,7 @@ export class NightScene {
   }
 
   _onVictory() {
+    gameState.markNightCompleted(this._nightId);
     const nextNight = Math.min(this._nightId + 1, 7);
     eventBus.emit('game:victory', { night: this._nightId });
     eventBus.emit('game:night-change', { nightId: nextNight });

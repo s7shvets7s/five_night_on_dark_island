@@ -63,10 +63,13 @@ export const TARGET_FPS = 60;
 export const SCENES = {
   BOOT: 'BootScene',
   TITLE: 'TitleScene',
+  NIGHT_SELECT: 'NightSelectScene',
+  SETTINGS: 'SettingsScene',
   NIGHT: 'NightScene',
   GAME_OVER: 'GameOverScene',
   VICTORY: 'VictoryScene',
   PAUSE: 'PauseScene',
+  CONFIRM_EXIT: 'ConfirmExitScene',
 };
 
 /** Starting scene on launch */
@@ -110,4 +113,53 @@ export const SCALING = {
   MIN_WIDTH: 640,
   /** Minimum logical height */
   MIN_HEIGHT: 360,
+};
+
+/** Game state — persists for session, reset on page reload */
+export const gameState = {
+  _unlockedNight: 1,
+  _completedNights: new Set(),
+  _volume: 0.7,
+  _locale: 'ru',
+
+  getUnlockedNight() {
+    return this._unlockedNight;
+  },
+
+  setUnlockedNight(nightId) {
+    if (nightId > this._unlockedNight) {
+      this._unlockedNight = nightId;
+    }
+  },
+
+  isNightUnlocked(nightId) {
+    return nightId <= this._unlockedNight;
+  },
+
+  isNightCompleted(nightId) {
+    return this._completedNights.has(nightId);
+  },
+
+  markNightCompleted(nightId) {
+    this._completedNights.add(nightId);
+    this.setUnlockedNight(nightId + 1);
+  },
+
+  getVolume() {
+    return this._volume;
+  },
+
+  setVolume(vol) {
+    this._volume = Math.max(0, Math.min(1, vol));
+  },
+
+  getLocale() {
+    return this._locale;
+  },
+
+  setLocale(locale) {
+    if (locale === 'ru' || locale === 'en') {
+      this._locale = locale;
+    }
+  },
 };

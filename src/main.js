@@ -2,12 +2,17 @@ import { Game } from './engine/Game.js';
 import { SCENES, GAME_TITLE, GAME_VERSION } from './config/gameConfig.js';
 import { BootScene } from './scenes/BootScene.js';
 import { TitleScene } from './scenes/TitleScene.js';
+import { NightSelectScene } from './scenes/NightSelectScene.js';
+import { SettingsScene } from './scenes/SettingsScene.js';
 import { NightScene } from './scenes/NightScene.js';
 import { GameOverScene } from './scenes/GameOverScene.js';
 import { VictoryScene } from './scenes/VictoryScene.js';
 import { PauseScene } from './scenes/PauseScene.js';
+import { ConfirmExitScene } from './scenes/ConfirmExitScene.js';
 import { AudioManager } from './engine/AudioManager.js';
 import { eventBus } from './engine/EventBus.js';
+import { i18n } from './i18n/index.js';
+import { gameState } from './config/gameConfig.js';
 
 /**
  * Application bootstrap.
@@ -22,6 +27,8 @@ async function bootstrap() {
 
   const game = new Game(canvas);
   const audioManager = new AudioManager();
+
+  i18n.setLocale(gameState.getLocale());
 
   const imageManifest = {
     cameras_helipad: 'cameras/helipad.png',
@@ -68,12 +75,16 @@ async function bootstrap() {
     onPause: () => game.sceneManager.push(SCENES.PAUSE),
     onResume: () => game.sceneManager.pop(),
     inputManager: game.inputManager,
+    audioManager,
   };
 
   game.registerScene(SCENES.BOOT, new BootScene(sceneDeps));
   game.registerScene(SCENES.TITLE, new TitleScene(sceneDeps));
+  game.registerScene(SCENES.NIGHT_SELECT, new NightSelectScene(sceneDeps));
+  game.registerScene(SCENES.SETTINGS, new SettingsScene(sceneDeps));
   game.registerScene(SCENES.GAME_OVER, new GameOverScene(sceneDeps));
   game.registerScene(SCENES.PAUSE, new PauseScene(sceneDeps));
+  game.registerScene(SCENES.CONFIRM_EXIT, new ConfirmExitScene(sceneDeps));
 
   game.registerScene(SCENES.NIGHT, createNightScene(currentNightId));
   game.registerScene(SCENES.VICTORY, new VictoryScene(sceneDeps));
