@@ -12,19 +12,20 @@ export class VictoryScene {
    * @param {Object} deps
    * @param {Function} deps.onSceneChange
    * @param {Object} deps.inputManager
+   * @param {Object} [deps.ads]
    * @param {number} [deps.nightId]
    */
-  constructor({ onSceneChange, inputManager, nightId }) {
+  constructor({ onSceneChange, inputManager, ads, nightId }) {
     this._onSceneChange = onSceneChange;
     this._inputManager = inputManager;
+    this._ads = ads;
     this._nightId = nightId || DEFAULT_NIGHT_ID;
     this._elapsed = 0;
     this._canInteract = false;
-    this._nextNight = DEFAULT_NIGHT_ID;
+    this._adShowing = false;
 
     eventBus.on('game:victory', ({ night }) => {
       this._nightId = night;
-      this._nextNight = Math.min(night + 1, 7);
     });
   }
 
@@ -88,8 +89,7 @@ export class VictoryScene {
       ctx.globalAlpha = 0.5 + pulse * 0.5;
       ctx.fillStyle = COLORS.TEXT_PRIMARY;
       ctx.font = `${fontSizeBody}px Courier New`;
-      const nextNight = Math.min(this._nightId + 1, 7);
-      ctx.fillText(`${i18n.t('victoryClickFor')} ${NIGHT_MAP[nextNight]?.name || 'Next Night'}`, w / 2, h * 0.7);
+      ctx.fillText(i18n.t('victoryClickFor') + ' ' + i18n.t('menuPlay'), w / 2, h * 0.7);
     }
 
     ctx.globalAlpha = 1;
@@ -99,10 +99,11 @@ export class VictoryScene {
   }
 
   _bindInput() {
-    this._inputManager.on('pointerdown', () => {
-      if (this._canInteract) {
-        eventBus.emit('game:night-change', { nightId: this._nextNight });
-        this._onSceneChange(SCENES.NIGHT);
+    this._inputManager.on('pointerdown', async () => {
+      if (this._canInteract && !this._adShowing) {
+        this._adShowing = true;
+        await this._ads?.showInterstitial();
+        this._onSceneChange(SCENES.TITLE);
       }
     });
   }

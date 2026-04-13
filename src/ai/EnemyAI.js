@@ -64,6 +64,13 @@ export class EnemyAI {
   _updatePatrol(enemy, config, dt) {
     enemy.tickMoveTimer(dt);
 
+    // If enemy reached the last room on path (door room), transition to AT_DOOR
+    // This prevents enemy from endlessly patrolling at the door room
+    if (enemy.pathIndex >= enemy.pathLength - 1) {
+      enemy.setState(ENEMY_STATES.AT_DOOR);
+      return 'moved';
+    }
+
     const baseInterval = config.moveIntervalMs;
     const variance = config.moveVariance;
     const interval = baseInterval + Math.random() * variance;
@@ -139,6 +146,8 @@ export class EnemyAI {
 
   /**
    * AT_DOOR: Enemy at door, may attack.
+   * FNAF-style: enemy waits minimum time before checking attack,
+   * reacts to light/door/mask in priority order.
    * @param {Enemy} enemy
    * @param {Object} config
    * @param {Object} officeSystem
@@ -148,24 +157,28 @@ export class EnemyAI {
   _updateAtDoor(enemy, config, dt, officeSystem, maskActive) {
     enemy.tickMoveTimer(dt);
 
-    const attackChance = 0.3 + (config.aggression / 20) * 0.3;
+    // 1. Enemy must stay at door for minimum time before any check
+    // This prevents instant attacks — gives player time to react
+    const minDoorTime = config.moveIntervalMs + config.moveVariance * 0.5;
+    if (enemy.moveTimer < minDoorTime) return null;
 
-    if (Math.random() < attackChance) {
-      return this._attemptAttack(enemy, config, officeSystem, maskActive);
-    }
+    enemy.resetMoveTimer();
 
+    // 2. LIGHT check first (if enemy fears light)
+    // Player can actively repel enemy by turning on light
     if (config.canReturnOnLight) {
       const lightOn = enemy.doorSide === 'left'
         ? officeSystem.leftLightOn
         : officeSystem.rightLightOn;
 
-      if (lightOn) {
+      if (lightOn && Math.random() < config.returnChance) {
         enemy.tryReturn(true);
         this._emitReturn(enemy);
         return 'returned';
       }
     }
 
+    // 3. DOOR check (if enemy retreats from closed doors)
     if (config.canReturnOnDoor) {
       const doorClosed = enemy.doorSide === 'left'
         ? !officeSystem.leftDoorOpen
@@ -174,10 +187,58 @@ export class EnemyAI {
       if (doorClosed && Math.random() < config.returnChance) {
         enemy.tryReturn(true);
         this._emitReturn(enemy);
-        return 'returned';
+        return 'blocked';
       }
     }
 
+    // 4. MASK reaction — 4 types of behavior per enemy
+    if (maskActive) {
+      const reaction = config.maskReaction;
+
+      if (reaction === MASK_REACTION.FEAR) {
+        // Enemy fears mask — runs away immediately
+        enemy.tryReturn(true);
+        this._emitReturn(enemy);
+        return 'blocked';
+      }
+
+      if (reaction === MASK_REACTION.STAND) {
+        // Enemy stands still — doesn't attack, doesn't leave
+        // Player must wait out mask cooldown
+        return null;
+      }
+
+      if (reaction === MASK_REACTION.ATTACK_ON_MASK) {
+        // Enemy becomes MORE aggressive when seeing mask
+        // High attack chance — mask is DANGEROUS for this enemy
+        const attackOnMaskChance = 0.7 + (config.aggression / 20) * 0.3;
+        if (Math.random() < attackOnMaskChance) {
+          enemy.setState(ENEMY_STATES.ATTACK);
+          return 'attacked';
+        }
+        // If not attacked this tick, will check again next cycle
+        return null;
+      }
+
+      // IGNORE → mask doesn't affect this enemy, continue to attack check
+    }
+
+    // 5. Normal attack check (checked once per minDoorTime cycle)
+    const attackChance = 0.3 + (config.aggression / 20) * 0.3;
+    if (Math.random() < attackChance) {
+      enemy.setState(ENEMY_STATES.ATTACK);
+      return 'attacked';
+    }
+
+    // 6. Periodic voluntary leave (even with open door)
+    // Creates natural pacing — enemies don't camp forever
+    if (Math.random() < config.returnChance * 0.3) {
+      enemy.tryReturn(false);
+      this._emitReturn(enemy);
+      return 'returned';
+    }
+
+    // Enemy continues waiting at door
     return null;
   }
 
@@ -270,42 +331,6 @@ export class EnemyAI {
 
     // 70% forward, 30% backward — creates steady pressure
     return Math.random() < 0.7 ? 'forward' : 'backward';
-  }
-
-  /**
-   * Attempt attack from door.
-   * @param {Enemy} enemy
-   * @param {Object} config
-   * @param {Object} officeSystem
-   * @param {boolean} maskActive
-   * @returns {string|null}
-   */
-  _attemptAttack(enemy, config, officeSystem, maskActive) {
-    const doorClosed = enemy.doorSide === 'left'
-      ? !officeSystem.leftDoorOpen
-      : !officeSystem.rightDoorOpen;
-
-    if (doorClosed) {
-      if (config.canReturnOnDoor) {
-        enemy.tryReturn(true);
-        return 'blocked';
-      }
-      return 'blocked';
-    }
-
-    if (maskActive) {
-      const reaction = config.maskReaction;
-      if (reaction === MASK_REACTION.FEAR) {
-        enemy.tryReturn(true);
-        return 'blocked';
-      } else if (reaction === MASK_REACTION.STAND) {
-        return 'blocked';
-      }
-      // IGNORE -> attack!
-    }
-
-    enemy.setState(ENEMY_STATES.ATTACK);
-    return 'attacked';
   }
 
   /**

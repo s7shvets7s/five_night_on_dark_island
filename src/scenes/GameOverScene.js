@@ -8,12 +8,14 @@ import { DEFAULT_NIGHT_ID } from '../data/nights.js';
 import { i18n } from '../i18n/index.js';
 
 export class GameOverScene {
-  constructor({ baseWidth, baseHeight, onSceneChange, inputManager }) {
+  constructor({ baseWidth, baseHeight, onSceneChange, inputManager, ads }) {
     this._onSceneChange = onSceneChange;
     this._inputManager = inputManager;
+    this._ads = ads;
     this._elapsed = 0;
     this._canInteract = false;
     this._retryNightId = DEFAULT_NIGHT_ID;
+    this._adShowing = false;
 
     eventBus.on('game:over', ({ nightId }) => {
       this._retryNightId = nightId;
@@ -79,10 +81,17 @@ export class GameOverScene {
   }
 
   _bindInput() {
-    this._inputManager.on('pointerdown', () => {
-      if (this._canInteract) {
-        eventBus.emit('game:night-change', { nightId: this._retryNightId });
-        this._onSceneChange(SCENES.NIGHT);
+    this._inputManager.on('pointerdown', async () => {
+      if (this._canInteract && !this._adShowing) {
+        this._adShowing = true;
+
+        // Show interstitial ad
+        const adShown = await this._ads?.showInterstitial();
+
+        // Brief delay so user sees transition (ad may have been instant)
+        await new Promise(resolve => setTimeout(resolve, adShown ? 1500 : 500));
+
+        this._onSceneChange(SCENES.TITLE);
       }
     });
   }

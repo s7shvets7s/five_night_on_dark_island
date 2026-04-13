@@ -93,6 +93,23 @@ export class YandexSDK {
   gameplayStop() {
     this._sdk?.features?.GameplayAPI?.stop();
   }
+
+  /** Signal that loading is complete and game is ready to play */
+  ready() {
+    try {
+      if (this._sdk?.loadingAPI) {
+        this._sdk.loadingAPI.ready();
+        console.log('[YandexSDK] LoadingAPI.ready() called');
+      } else if (window.YaGames?.loadingAPI) {
+        window.YaGames.loadingAPI.ready();
+        console.log('[YandexSDK] LoadingAPI.ready() called (window)');
+      } else {
+        console.log('[YandexSDK] LoadingAPI not available, skipping');
+      }
+    } catch (e) {
+      console.warn('[YandexSDK] LoadingAPI.ready() failed:', e);
+    }
+  }
 }
 
 /** Singleton instance */

@@ -14,9 +14,10 @@ export const ENEMY_STATES = {
 };
 
 export const MASK_REACTION = {
-  FEAR: 'FEAR',     // Боится маски → return на базу
-  STAND: 'STAND',    // Стоит и смотрит → не атакует, не уходит
-  IGNORE: 'IGNORE',  // Игнорирует маску → атакует!
+  FEAR: 'FEAR',          // Боится маски → уходит на базу
+  STAND: 'STAND',        // Стоит и смотрит → не атакует, не уходит
+  IGNORE: 'IGNORE',      // Игнорирует маску → атакует как обычно
+  ATTACK_ON_MASK: 'ATTACK_ON_MASK', // Агрессивно атакует при маске (повышенный шанс)
 };
 
 // ============================================================
@@ -41,14 +42,14 @@ export const DOOR_POSITIONS_PERCENT = {
 // ENEMY CONFIG — конфиг каждого врага
 // ============================================================
 export const ENEMY_CONFIG = {
-  bonnie: {
-    id: 'bonnie',
-    name: 'Bonnie',
+  millioner: {
+    id: 'millioner',
+    name: 'Millioner',
     color: '#6644aa',
     sprites: {
       idle: 'millioner.png',
-      atDoor: 'bonnie_door.png',
-      attack: 'bonnie_attack.png',
+      atDoor: 'millioner.png',
+      attack: 'millioner_attack.png',
     },
     baseRoom: 'helipad',
     doorRoom: 'dock',
@@ -76,14 +77,14 @@ export const ENEMY_CONFIG = {
     maskReaction: MASK_REACTION.FEAR,
     initialState: ENEMY_STATES.PATROL,
   },
-  chica: {
-    id: 'chica',
-    name: 'Chica',
+  president: {
+    id: 'president',
+    name: 'President',
     color: '#ccaa22',
     sprites: {
       idle: 'president.png',
-      atDoor: 'chica_door.png',
-      attack: 'chica_attack.png',
+      atDoor: 'president.png',
+      attack: 'president_attack.png',
     },
     baseRoom: 'helipad',
     doorRoom: 'generator',
@@ -110,14 +111,14 @@ export const ENEMY_CONFIG = {
     maskReaction: MASK_REACTION.FEAR,
     initialState: ENEMY_STATES.PATROL,
   },
-  foxy: {
-    id: 'foxy',
-    name: 'Foxy',
+  since: {
+    id: 'since',
+    name: 'Since',
     color: '#ff4400',
     sprites: {
       idle: 'since.png',
-      atDoor: 'foxy_door.png',
-      attack: 'foxy_attack.png',
+      atDoor: 'since.png',
+      attack: 'since_attack.png',
     },
     baseRoom: 'helipad',
     doorRoom: 'dock',
@@ -135,22 +136,22 @@ export const ENEMY_CONFIG = {
     transitTimeMs: 4500,
     aggression: 8,
     canReturnOnLight: false,
-    canReturnOnDoor: false,
-    returnChance: 0,
-    returnCooldownMs: 0,
+    canReturnOnDoor: true,
+    returnChance: 0.3,
+    returnCooldownMs: 4000,
     burstChance: 0.25,
     burstMoveIntervalMs: 1000,
-    maskReaction: MASK_REACTION.STAND,
+    maskReaction: MASK_REACTION.ATTACK_ON_MASK,
     initialState: ENEMY_STATES.PATROL,
   },
-  freddy: {
-    id: 'freddy',
-    name: 'Freddy',
+  fake_millioner: {
+    id: 'fake_millioner',
+    name: 'Fake_millioner',
     color: '#885522',
     sprites: {
-      idle: 'freddy_idle.png',
-      atDoor: 'freddy_door.png',
-      attack: 'freddy_attack.png',
+      idle: 'fake_millioner.png',
+      atDoor: 'fake_millioner.png',
+      attack: 'fake_millioner_attack.png',
     },
     baseRoom: 'helipad',
     doorRoom: 'generator',
@@ -173,6 +174,74 @@ export const ENEMY_CONFIG = {
     returnCooldownMs: 8000,
     burstChance: 0.2,
     burstMoveIntervalMs: 1500,
+    maskReaction: MASK_REACTION.IGNORE,
+    initialState: ENEMY_STATES.PATROL,
+  },
+  micro: {
+    id: 'micro',
+    name: 'Micro',
+    color: '#44ff88',
+    sprites: {
+      idle: 'micro.png',
+      atDoor: 'micro.png',
+      attack: 'micro_attack.png',
+    },
+    baseRoom: 'helipad',
+    doorRoom: 'dock',
+    doorSide: 'left',
+    doorOffset: { x: 0, y: 0 },
+    path: [
+      'helipad',
+      'golden_temple',
+      'central_street',
+      'guest_house',
+      'dock',
+    ],
+    phases: ['patrol', 'door'],
+    moveIntervalMs: 3000,
+    moveVariance: 1500,
+    transitTimeMs: 3500,
+    aggression: 12,
+    canReturnOnLight: false,
+    canReturnOnDoor: true,
+    returnChance: 0.4,
+    returnCooldownMs: 3000,
+    burstChance: 0.4,
+    burstMoveIntervalMs: 800,
+    maskReaction: MASK_REACTION.STAND,
+    initialState: ENEMY_STATES.PATROL,
+  },
+  dancer: {
+    id: 'dancer',
+    name: 'Dancer',
+    color: '#ff44aa',
+    sprites: {
+      idle: 'dancer.png',
+      atDoor: 'dancer.png',
+      attack: 'dancer_attack.png',
+    },
+    baseRoom: 'helipad',
+    doorRoom: 'generator',
+    doorSide: 'right',
+    doorOffset: { x: 0, y: 0 },
+    path: [
+      'helipad',
+      'golden_temple',
+      'greenhouse',
+      'central_street',
+      'generator',
+    ],
+    phases: ['patrol', 'corridor', 'door'],
+    moveIntervalMs: 5500,
+    moveVariance: 3500,
+    transitTimeMs: 5000,
+    aggression: 9,
+    canReturnOnLight: true,
+    canReturnOnDoor: false,
+    returnChance: 0.5,
+    returnCooldownMs: 7000,
+    burstChance: 0.2,
+    burstMoveIntervalMs: 2000,
     maskReaction: MASK_REACTION.IGNORE,
     initialState: ENEMY_STATES.PATROL,
   },

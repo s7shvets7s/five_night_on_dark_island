@@ -7,9 +7,9 @@
 /** Debug and development flags */
 export const CONFIG = {
   DEBUG: false,
-  USE_PLACEHOLDER_ASSETS: true,
+  USE_PLACEHOLDER_ASSETS: false,
   AUTO_WIN_FOR_TEST: false,
-  DISABLE_ADS: true,
+  DISABLE_ADS: false,
   GOD_MODE: false,
   MASK_DURATION: 10,
   MASK_COOLDOWN: 30,
@@ -17,13 +17,27 @@ export const CONFIG = {
   GENERATOR_INTERVAL: 50,
   GENERATOR_TIMEOUT: 10,
   GENERATOR_TIME_LIMIT: 3,
-  GENERATOR_SUCCESS_BONUS: 5,
-  GENERATOR_FAIL_PENALTY: 10,
+  GENERATOR_SUCCESS_BONUS: 3,
+  GENERATOR_FAIL_PENALTY: 12,
   GENERATOR_BLINK_RATE: 0.5,
   GENERATOR_ROTATIONS_NEEDED: 2,
   CAMERA_ENEMY_BRIGHTNESS: 0.4,
   CAMERA_ENEMY_SATURATION: 0,
 };
+
+/** Power drain multipliers per night — scaling difficulty */
+export const POWER_DRAIN_MULTIPLIERS = {
+  1: 0.85,
+  2: 0.95,
+  3: 1.0,
+  4: 1.10,
+  5: 1.20,
+  6: 1.35,
+  7: 1.50,
+};
+
+/** Chance of showing ad instead of jumpscare (rare event) */
+export const RANDOM_AD_CHANCE = 0.03;
 
 export const CAMERA_GLITCH = {
   CHECK_INTERVAL_MIN: 3,

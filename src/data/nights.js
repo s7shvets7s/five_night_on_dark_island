@@ -26,7 +26,7 @@ export const NIGHTS = [
     name: 'Night 1',
     durationMs: 180000,
     spawns: [
-      { enemyId: 'bonnie', aggression: 8, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'millioner', aggression: 8, startHour: 0, startRoom: 'helipad' },
     ],
   },
   {
@@ -34,8 +34,8 @@ export const NIGHTS = [
     name: 'Night 2',
     durationMs: 210000,
     spawns: [
-      { enemyId: 'bonnie', aggression: 10, startHour: 0, startRoom: 'helipad' },
-      { enemyId: 'foxy', aggression: 7, startHour: 1, startRoom: 'helipad' },
+      { enemyId: 'millioner', aggression: 10, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'since', aggression: 7, startHour: 1, startRoom: 'helipad' },
     ],
   },
   {
@@ -43,10 +43,10 @@ export const NIGHTS = [
     name: 'Night 3',
     durationMs: 240000,
     spawns: [
-      { enemyId: 'bonnie', aggression: 12, startHour: 0, startRoom: 'helipad' },
-      { enemyId: 'chica', aggression: 9, startHour: 0, startRoom: 'helipad' },
-      { enemyId: 'foxy', aggression: 9, startHour: 1, startRoom: 'helipad' },
-      { enemyId: 'freddy', aggression: 5, startHour: 2, startRoom: 'helipad' },
+      { enemyId: 'millioner', aggression: 12, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'president', aggression: 9, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'since', aggression: 9, startHour: 1, startRoom: 'helipad' },
+      { enemyId: 'fake_millioner', aggression: 5, startHour: 2, startRoom: 'helipad' },
     ],
   },
   {
@@ -54,10 +54,10 @@ export const NIGHTS = [
     name: 'Night 4',
     durationMs: 270000,
     spawns: [
-      { enemyId: 'bonnie', aggression: 14, startHour: 0, startRoom: 'helipad' },
-      { enemyId: 'chica', aggression: 12, startHour: 0, startRoom: 'helipad' },
-      { enemyId: 'foxy', aggression: 11, startHour: 0, startRoom: 'helipad' },
-      { enemyId: 'freddy', aggression: 9, startHour: 1, startRoom: 'helipad' },
+      { enemyId: 'millioner', aggression: 14, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'president', aggression: 12, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'since', aggression: 11, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'fake_millioner', aggression: 9, startHour: 1, startRoom: 'helipad' },
     ],
   },
   {
@@ -65,10 +65,11 @@ export const NIGHTS = [
     name: 'Night 5',
     durationMs: 300000,
     spawns: [
-      { enemyId: 'bonnie', aggression: 16, startHour: 0, startRoom: 'helipad' },
-      { enemyId: 'chica', aggression: 14, startHour: 0, startRoom: 'helipad' },
-      { enemyId: 'foxy', aggression: 13, startHour: 0, startRoom: 'helipad' },
-      { enemyId: 'freddy', aggression: 12, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'millioner', aggression: 16, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'president', aggression: 14, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'since', aggression: 13, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'fake_millioner', aggression: 12, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'micro', aggression: 8, startHour: 1, startRoom: 'helipad' },
     ],
   },
   {
@@ -76,10 +77,12 @@ export const NIGHTS = [
     name: 'Night 6',
     durationMs: 300000,
     spawns: [
-      { enemyId: 'bonnie', aggression: 18, startHour: 0, startRoom: 'helipad' },
-      { enemyId: 'chica', aggression: 17, startHour: 0, startRoom: 'helipad' },
-      { enemyId: 'foxy', aggression: 15, startHour: 0, startRoom: 'helipad' },
-      { enemyId: 'freddy', aggression: 15, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'millioner', aggression: 18, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'president', aggression: 17, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'since', aggression: 15, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'fake_millioner', aggression: 15, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'micro', aggression: 12, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'dancer', aggression: 10, startHour: 1, startRoom: 'helipad' },
     ],
   },
   {
@@ -87,10 +90,12 @@ export const NIGHTS = [
     name: 'Night 7 (Custom)',
     durationMs: 300000,
     spawns: [
-      { enemyId: 'bonnie', aggression: 20, startHour: 0, startRoom: 'helipad' },
-      { enemyId: 'chica', aggression: 20, startHour: 0, startRoom: 'helipad' },
-      { enemyId: 'foxy', aggression: 20, startHour: 0, startRoom: 'helipad' },
-      { enemyId: 'freddy', aggression: 20, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'millioner', aggression: 20, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'president', aggression: 20, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'since', aggression: 20, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'fake_millioner', aggression: 20, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'micro', aggression: 20, startHour: 0, startRoom: 'helipad' },
+      { enemyId: 'dancer', aggression: 20, startHour: 0, startRoom: 'helipad' },
     ],
   },
 ];

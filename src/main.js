@@ -15,6 +15,10 @@ import { SFX } from './config/sfxConfig.js';
 import { eventBus } from './engine/EventBus.js';
 import { i18n } from './i18n/index.js';
 import { gameState } from './config/gameConfig.js';
+import { yandexSDK } from './yandex/YandexSDK.js';
+import { YandexAds } from './yandex/YandexAds.js';
+import { YandexPlayer } from './yandex/YandexPlayer.js';
+import { SaveSystem } from './system/SaveSystem.js';
 
 /**
  * Application bootstrap.
@@ -27,13 +31,44 @@ async function bootstrap() {
     return;
   }
 
+  // Force landscape orientation on mobile devices
+  await lockOrientation();
+
+  // Initialize Yandex SDK first
+  await yandexSDK.init();
+
   const game = new Game(canvas);
   const audioManager = new AudioManager();
   const sfxManager = new SFXManager(audioManager);
   sfxManager.loadAll(SFX);
   sfxManager.enableRandom(true);
 
+  // Initialize Yandex player and save system
+  const player = new YandexPlayer(yandexSDK);
+  const saveSystem = new SaveSystem(player);
+  await saveSystem.load();
+
+  // Auto-detect language from SDK if available
+  if (yandexSDK.isAvailable) {
+    const platformInfo = yandexSDK.getPlatformInfo();
+    const sdkLang = platformInfo.language;
+    if (sdkLang === 'ru' || sdkLang === 'en') {
+      gameState.setLocale(sdkLang);
+      console.log(`[Bootstrap] Language detected: ${sdkLang}`);
+    }
+  }
+
   i18n.setLocale(gameState.getLocale());
+
+  // Apply loaded volume settings
+  audioManager.setMusicVolume(gameState.getMusicVolume());
+  audioManager.setMasterSFXVolume(gameState.getSFXVolume());
+
+  // Setup SDK pause/resume handling
+  setupSdkPauseHandling(game, audioManager);
+
+  // Initialize Yandex ads
+  const ads = new YandexAds(yandexSDK);
 
   const imageManifest = {
     cameras_helipad: 'cameras/helipad.png',
@@ -51,18 +86,19 @@ async function bootstrap() {
     enemies_millioner: 'enemies/millioner.png',
     enemies_president: 'enemies/president.png',
     enemies_since: 'enemies/since.png',
-    enemies_bonnie_door: 'enemies/bonnie_door.png',
-    enemies_chica_door: 'enemies/chica_door.png',
-    enemies_foxy_door: 'enemies/foxy_door.png',
-    enemies_freddy_door: 'enemies/freddy_door.png',
-    enemies_bonnie_attack: 'enemies/bonnie_attack.png',
-    enemies_chica_attack: 'enemies/chica_attack.png',
-    enemies_foxy_attack: 'enemies/foxy_attack.png',
-    enemies_freddy_attack: 'enemies/freddy_attack.png',
+    enemies_fake_millioner: 'enemies/fake_millioner.png',
+    enemies_micro: 'enemies/micro.png',
+    enemies_dancer: 'enemies/dancer.png',
+    enemies_millioner_attack: 'enemies/millioner_attack.png',
+    enemies_president_attack: 'enemies/president_attack.png',
+    enemies_since_attack: 'enemies/since_attack.png',
+    enemies_fake_millioner_attack: 'enemies/fake_millioner_attack.png',
+    enemies_micro_attack: 'enemies/micro_attack.png',
+    enemies_dancer_attack: 'enemies/dancer_attack.png',
   };
   game.assetLoader.queueImages(imageManifest);
 
-  let currentNightId = 1;
+  let currentNightId = gameState.getUnlockedNight();
 
   function createNightScene(nightId) {
     return new NightScene({
@@ -72,6 +108,7 @@ async function bootstrap() {
       audioManager,
       sfxManager,
       assetLoader: game.assetLoader,
+      ads,
       nightId,
     });
   }
@@ -83,6 +120,7 @@ async function bootstrap() {
     inputManager: game.inputManager,
     audioManager,
     sfxManager,
+    ads,
   };
 
   game.registerScene(SCENES.BOOT, new BootScene(sceneDeps));
@@ -125,8 +163,6 @@ async function bootstrap() {
     'assets/audio/music/as-the-light-fades.ogg',
   ];
   audioManager.setPlaylist(musicTracks);
-  audioManager.setMusicVolume(gameState.getMusicVolume());
-  audioManager.setMasterSFXVolume(gameState.getSFXVolume());
 
   document.addEventListener('click', () => {
     audioManager.init();
@@ -135,6 +171,98 @@ async function bootstrap() {
 
   game.start();
   console.log(`[Bootstrap] ${GAME_TITLE} v${GAME_VERSION} started`);
+
+  // Signal to Yandex that the game is ready to play
+  yandexSDK.ready();
+
+  // Start save system auto-save cycle
+  setupSaveSystem(game, saveSystem);
+
+  // Hook into gameState changes for auto-save
+  setupGameStateSaveHooks(saveSystem);
+}
+
+/**
+ * Setup SDK pause/resume event handlers.
+ * Stops audio and gameplay when app is minimized.
+ */
+function setupSdkPauseHandling(game, audioManager) {
+  // Handle browser visibility change (works everywhere)
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      audioManager?.stopAll();
+      yandexSDK.gameplayStop();
+      console.log('[Bootstrap] App minimized — paused');
+    } else {
+      yandexSDK.gameplayStart();
+      audioManager?.playMusic();
+      console.log('[Bootstrap] App restored — resumed');
+    }
+  });
+
+  // Handle Yandex SDK pause/resume events
+  if (yandexSDK.isAvailable) {
+    window.addEventListener('game_api_pause', () => {
+      audioManager?.stopAll();
+      yandexSDK.gameplayStop();
+      console.log('[Bootstrap] SDK pause event');
+    });
+
+    window.addEventListener('game_api_resume', () => {
+      yandexSDK.gameplayStart();
+      audioManager?.playMusic();
+      console.log('[Bootstrap] SDK resume event');
+    });
+  }
+}
+
+/**
+ * Integrate save system into game loop for auto-save.
+ * Uses setInterval instead of hooking gameLoop.update
+ * to avoid issues with private fields and restarts.
+ */
+function setupSaveSystem(game, saveSystem) {
+  const SAVE_INTERVAL_MS = 2000;
+
+  setInterval(() => {
+    saveSystem.update(SAVE_INTERVAL_MS / 1000);
+  }, SAVE_INTERVAL_MS);
+}
+
+/**
+ * Subscribe to game events that should trigger saves.
+ */
+function setupGameStateSaveHooks(saveSystem) {
+  // Save when night is completed
+  eventBus.on('game:victory', () => {
+    saveSystem.markDirty();
+    console.log('[Bootstrap] Save marked dirty (victory)');
+  });
+
+  // Save when settings change
+  eventBus.on('settings:change', () => {
+    saveSystem.markDirty();
+    console.log('[Bootstrap] Save marked dirty (settings)');
+  });
+}
+
+/**
+ * Lock screen orientation to landscape on mobile devices.
+ * Uses Screen Orientation API (browser-level, not Yandex SDK).
+ * Note: Yandex Games SDK doesn't have orientation lock —
+ * orientation is set in the developer console draft.
+ */
+async function lockOrientation() {
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      await screen.orientation.lock('landscape');
+      console.log('[Bootstrap] Orientation locked to landscape (Screen Orientation API)');
+      return;
+    }
+  } catch (e) {
+    console.log('[Bootstrap] Orientation lock not supported:', e.message);
+  }
+  console.log('[Bootstrap] Orientation lock skipped — set in Yandex Games draft instead');
 }
 
 bootstrap();

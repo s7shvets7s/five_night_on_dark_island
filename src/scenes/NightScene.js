@@ -2,8 +2,8 @@
  * NightScene — main gameplay scene.
  * Manages office view, camera system, all game systems integration.
  */
-import { SCENES, COLORS, UI, CONFIG, gameState } from '../config/gameConfig.js';
-import { ENEMY_CONFIG, ENEMY_MAP, DOOR_POSITIONS_PERCENT, DOOR_IMAGE_SIZE } from '../config/enemyConfig.js';
+import { SCENES, COLORS, UI, CONFIG, gameState, POWER_DRAIN_MULTIPLIERS, RANDOM_AD_CHANCE } from '../config/gameConfig.js';
+import { ENEMY_CONFIG, ENEMY_MAP, DOOR_POSITIONS_PERCENT, DOOR_IMAGE_SIZE, ENEMY_STATES } from '../config/enemyConfig.js';
 import { PowerSystem } from '../systems/PowerSystem.js';
 import { CameraSystem } from '../systems/CameraSystem.js';
 import { ClockSystem } from '../systems/ClockSystem.js';
@@ -29,21 +29,24 @@ export class NightScene {
    * @param {Object} [deps.audioManager]
    * @param {Object} [deps.sfxManager]
    * @param {Object} [deps.assetLoader]
+   * @param {Object} [deps.ads]
    * @param {number} [deps.nightId]
    */
-  constructor({ onSceneChange, onPause, inputManager, audioManager, sfxManager, assetLoader, nightId }) {
+  constructor({ onSceneChange, onPause, inputManager, audioManager, sfxManager, assetLoader, ads, nightId }) {
     this._onSceneChange = onSceneChange;
     this._onPause = onPause;
     this._inputManager = inputManager;
     this._audioManager = audioManager;
     this._sfxManager = sfxManager;
     this._assetLoader = assetLoader;
+    this._ads = ads;
+    this._adShowing = false;
 
     this._powerSystem = new PowerSystem({ eventBus });
     this._cameraSystem = new CameraSystem({ eventBus, assetLoader: this._assetLoader });
     this._clockSystem = new ClockSystem({ eventBus });
     this._officeSystem = new OfficeSystem({ eventBus });
-    this._jumpscareSystem = new JumpscareSystem({ eventBus });
+    this._jumpscareSystem = new JumpscareSystem({ eventBus, assetLoader: this._assetLoader });
     this._hudSystem = new HUDSystem({ eventBus });
     this._enemyAI = new EnemyAI({ eventBus });
     this._glitchMiniGame = new CameraGlitchMiniGame({
@@ -81,6 +84,11 @@ export class NightScene {
   }
 
   enter() {
+    // Clear stale handlers — prevents duplicates on restart from pause menu
+    this._unbindSFX();
+    this._inputManager.clearAll();
+    this._adShowing = false;
+
     this._paused = false;
     this._gameOver = false;
     this._victory = false;
@@ -90,6 +98,8 @@ export class NightScene {
     this._isPanning = false;
 
     this._powerSystem.reset();
+    const nightMultiplier = POWER_DRAIN_MULTIPLIERS[this._nightId] || 1.0;
+    this._powerSystem.setDrainMultiplier(nightMultiplier);
     this._clockSystem.reset(this._nightConfig.durationMs);
     this._officeSystem.reset();
     this._cameraSystem.close();
@@ -131,7 +141,7 @@ export class NightScene {
 
   exit() {
     this._unbindSFX();
-    this._audioManager?.stopCameraStaticNoise();
+    this._audioManager?.stopAll();
     this._inputManager.clearAll();
   }
 
@@ -413,6 +423,8 @@ export class NightScene {
 
     for (const enemy of this._enemies) {
       if (enemy.isDefeated || enemy.isInTransit) continue;
+      // Only render enemy at door when in AT_DOOR state (not just patrolling the room)
+      if (enemy.state !== ENEMY_STATES.AT_DOOR) continue;
 
       if (enemy.currentRoom === leftDoorRoom && !leftClosed) {
         const lightOn = this._officeSystem.leftLightOn;
@@ -455,6 +467,7 @@ export class NightScene {
 
   /**
    * Render enemy at door if light reveals one.
+   * Light ON → bright sprite. Light OFF → dark silhouette + noise.
    * @param {CanvasRenderingContext2D} ctx
    * @param {'left'|'right'} side
    * @param {number} officeX
@@ -464,57 +477,101 @@ export class NightScene {
    */
   _renderEnemyAtDoor(ctx, side, officeX, w, h, lightOn = false) {
     const doorRoom = side === 'left' ? 'dock' : 'generator';
-    const enemy = this._enemies.find(e => e.currentRoom === doorRoom && !e.isDefeated);
+    const enemy = this._enemies.find(e => e.currentRoom === doorRoom && !e.isDefeated && e.state === ENEMY_STATES.AT_DOOR);
     if (!enemy) return;
 
     const doorPos = side === 'left' ? DOOR_POSITIONS_PERCENT.left : DOOR_POSITIONS_PERCENT.right;
     const enemyOffset = enemy.doorOffset;
 
-    const xOffset = (doorPos.x * w) + (enemyOffset.x * w / DOOR_IMAGE_SIZE.width);
-    const yOffset = (doorPos.y * h) + (enemyOffset.y * h / DOOR_IMAGE_SIZE.height);
-    const x = xOffset;
-    const y = yOffset;
+    const x = (doorPos.x * w) + (enemyOffset.x * w / DOOR_IMAGE_SIZE.width);
+    const y = (doorPos.y * h) + (enemyOffset.y * h / DOOR_IMAGE_SIZE.height);
     const size = w * 0.07;
 
-    const enemyConfig = ENEMY_CONFIG[enemy.id];
-    const spriteFilename = enemyConfig?.sprites?.atDoor;
-    const spriteKey = spriteFilename ? `enemies_${spriteFilename.replace('.png', '')}` : null;
-    const sprite = spriteKey ? this._assetLoader?.getImage(spriteKey) : null;
+    if (lightOn) {
+      // Light ON — render bright sprite
+      const enemyConfig = ENEMY_CONFIG[enemy.id];
+      const spriteFilename = enemyConfig?.sprites?.atDoor;
+      const spriteKey = spriteFilename ? `enemies_${spriteFilename.replace('.png', '')}` : null;
+      const sprite = spriteKey ? this._assetLoader?.getImage(spriteKey) : null;
 
-    if (sprite && sprite.complete && sprite.naturalWidth > 0) {
-      ctx.drawImage(sprite, x, y, size, size);
-    } else {
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-      ctx.beginPath();
-      ctx.ellipse(x + size / 2, y + size * 0.8, size * 0.4, size * 0.1, 0, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = enemy.color || '#ff0000';
-      ctx.beginPath();
-      ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#ffffff';
-      ctx.beginPath();
-      ctx.arc(x + size * 0.35, y + size * 0.35, size * 0.1, 0, Math.PI * 2);
-      ctx.arc(x + size * 0.65, y + size * 0.35, size * 0.1, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#000000';
-      ctx.beginPath();
-      ctx.arc(x + size * 0.35, y + size * 0.35, size * 0.04, 0, Math.PI * 2);
-      ctx.arc(x + size * 0.65, y + size * 0.35, size * 0.04, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = '#000000';
-      ctx.beginPath();
-      ctx.arc(x + size / 2, y + size * 0.65, size * 0.15, 0, Math.PI);
-      ctx.fill();
-
-      ctx.fillStyle = '#ffffff';
-      for (let i = -1; i <= 1; i++) {
-        ctx.fillRect(x + size / 2 + i * size * 0.1 - 2, y + size * 0.65, 4, 5);
+      if (sprite && sprite.complete && sprite.naturalWidth > 0) {
+        ctx.drawImage(sprite, x, y, size, size);
+      } else {
+        this._renderDoorPlaceholder(ctx, enemy, x, y, size);
       }
+    } else {
+      // Light OFF — dark silhouette + noise (camera-like effect)
+      this._renderEnemySilhouette(ctx, enemy, x, y, size, w, h);
+    }
+  }
+
+  /**
+   * Render enemy silhouette with noise when light is OFF.
+   */
+  _renderEnemySilhouette(ctx, enemy, x, y, size, w, h) {
+    // Dark body
+    ctx.fillStyle = 'rgba(20, 20, 20, 0.85)';
+    ctx.beginPath();
+    ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Shadow on ground
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.beginPath();
+    ctx.ellipse(x + size / 2, y + size * 0.85, size * 0.4, size * 0.1, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Faint eyes — barely visible
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
+    ctx.beginPath();
+    ctx.arc(x + size * 0.35, y + size * 0.35, size * 0.08, 0, Math.PI * 2);
+    ctx.arc(x + size * 0.65, y + size * 0.35, size * 0.08, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Static noise overlay (like camera effect)
+    const noiseCount = Math.floor(size * 0.3);
+    ctx.fillStyle = 'rgba(100, 100, 100, 0.15)';
+    for (let i = 0; i < noiseCount; i++) {
+      const nx = x + Math.random() * size;
+      const ny = y + Math.random() * size;
+      ctx.fillRect(nx, ny, 1, 1);
+    }
+  }
+
+  /**
+   * Render placeholder enemy at door (no sprite available).
+   */
+  _renderDoorPlaceholder(ctx, enemy, x, y, size) {
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+    ctx.beginPath();
+    ctx.ellipse(x + size / 2, y + size * 0.8, size * 0.4, size * 0.1, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = enemy.color || '#ff0000';
+    ctx.beginPath();
+    ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(x + size * 0.35, y + size * 0.35, size * 0.1, 0, Math.PI * 2);
+    ctx.arc(x + size * 0.65, y + size * 0.35, size * 0.1, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.arc(x + size * 0.35, y + size * 0.35, size * 0.04, 0, Math.PI * 2);
+    ctx.arc(x + size * 0.65, y + size * 0.35, size * 0.04, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#000000';
+    ctx.beginPath();
+    ctx.arc(x + size / 2, y + size * 0.65, size * 0.15, 0, Math.PI);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffffff';
+    for (let i = -1; i <= 1; i++) {
+      ctx.fillRect(x + size / 2 + i * size * 0.1 - 2, y + size * 0.65, 4, 5);
     }
   }
 
@@ -720,6 +777,20 @@ export class NightScene {
   }
 
   _onJumpscare(enemy) {
+    // Rare event: show ad instead of jumpscare — enemy "escapes"
+    if (!this._adShowing && Math.random() < RANDOM_AD_CHANCE) {
+      this._adShowing = true;
+      enemy.setState(ENEMY_STATES.PATROL);
+      enemy.setAggression(Math.max(0, enemy.aggression - 5));
+      // Move enemy back one room so it doesn't instantly attack again
+      if (enemy.pathIndex > 0) {
+        enemy.startTransitBackward(2000);
+      }
+      this._ads?.showInterstitial();
+      this._adShowing = false;
+      return; // No jumpscare, game continues
+    }
+
     this._jumpscareSystem.trigger(enemy, () => {
       this._gameOver = true;
       eventBus.emit('game:over', { nightId: this._nightId });
@@ -729,9 +800,7 @@ export class NightScene {
 
   _onVictory() {
     gameState.markNightCompleted(this._nightId);
-    const nextNight = Math.min(this._nightId + 1, 7);
     eventBus.emit('game:victory', { night: this._nightId });
-    eventBus.emit('game:night-change', { nightId: nextNight });
     setTimeout(() => {
       this._onSceneChange(SCENES.VICTORY);
     }, 1000);
@@ -823,7 +892,7 @@ export class NightScene {
       if (this._isInRect(pos, generatorBounds)) {
         if (this._generatorMiniGame.isShowingMenu) {
           this._generatorMiniGame.closeInteraction();
-        } else {
+        } else if (this._generatorMiniGame.isActive) {
           this._generatorMiniGame.startInteraction();
         }
         return;

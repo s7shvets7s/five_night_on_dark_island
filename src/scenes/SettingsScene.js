@@ -349,6 +349,8 @@ export class SettingsScene {
     if (this._audioManager) {
       this._audioManager.setMasterVolume(vol);
     }
+
+    eventBus.emit('settings:change', { key: 'volume', value: vol });
   }
 
   _updateMusicVolume(x) {
@@ -362,6 +364,8 @@ export class SettingsScene {
     if (this._audioManager) {
       this._audioManager.setMusicVolume(vol);
     }
+
+    eventBus.emit('settings:change', { key: 'musicVolume', value: vol });
   }
 
   _updateSFXVolume(x) {
@@ -375,5 +379,7 @@ export class SettingsScene {
     if (this._audioManager) {
       this._audioManager.setMasterSFXVolume(vol);
     }
+
+    eventBus.emit('settings:change', { key: 'sfxVolume', value: vol });
   }
 }

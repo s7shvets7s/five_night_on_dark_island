@@ -11,14 +11,17 @@ export class PauseScene {
    * @param {Function} deps.onSceneChange
    * @param {Object} deps.inputManager
    * @param {Object} [deps.sfxManager]
+   * @param {Object} [deps.ads]
    */
-  constructor({ onSceneChange, onResume, inputManager, sfxManager }) {
+  constructor({ onSceneChange, onResume, inputManager, sfxManager, ads }) {
     this._onSceneChange = onSceneChange;
     this._onResume = onResume;
     this._inputManager = inputManager;
     this._sfxManager = sfxManager;
+    this._ads = ads;
     this._buttons = [];
     this._pointerDownHandler = null;
+    this._adShowing = false;
   }
 
   enter() {
@@ -109,13 +112,18 @@ export class PauseScene {
   }
 
   _handleButtonClick(label) {
+    if (this._adShowing) return;
     this._sfxManager?.play('buttonClick');
     if (label === i18n.t('pauseResume')) {
       if (this._onResume) {
         this._onResume();
       }
     } else if (label === i18n.t('pauseRestart')) {
-      this._onSceneChange(SCENES.NIGHT);
+      this._adShowing = true;
+      this._ads?.showInterstitial().then(() => {
+        this._adShowing = false;
+        this._onSceneChange(SCENES.NIGHT);
+      });
     } else if (label === i18n.t('pauseQuit')) {
       this._onSceneChange(SCENES.TITLE);
     }

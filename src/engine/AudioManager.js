@@ -315,4 +315,21 @@ export class AudioManager {
       this._cameraStaticGain.gain.value = Math.max(0, Math.min(1, volume));
     }
   }
+
+  /**
+   * Stop all audio immediately (used on game exit / scene change).
+   */
+  stopAll() {
+    this.stopCameraStaticNoise();
+    // Close and recreate context to kill all playing sounds
+    if (this._ctx) {
+      try {
+        this._ctx.close();
+      } catch (e) {
+        // Ignore
+      }
+      this._ctx = null;
+      this._initialized = false;
+    }
+  }
 }

@@ -2,7 +2,7 @@
  * CameraSystem — manages camera switching and state.
  */
 import { Renderer } from '../engine/Renderer.js';
-import { ENEMY_CONFIG } from '../config/enemyConfig.js';
+import { ENEMY_CONFIG, ENEMY_STATES } from '../config/enemyConfig.js';
 import { CONFIG } from '../config/gameConfig.js';
 
 export class CameraSystem {
@@ -102,9 +102,10 @@ export class CameraSystem {
       ctx.drawImage(cameraImage, camX, camY, camW, camH);
 
       // Draw enemies BEFORE noise so they appear behind static
+      // Hide enemy if in AT_DOOR state (they're at the office door now)
       if (enemies) {
         for (const enemy of enemies) {
-          if (enemy.currentRoom === cameraId && !enemy.isInTransit) {
+          if (enemy.currentRoom === cameraId && !enemy.isInTransit && enemy.state !== ENEMY_STATES.AT_DOOR) {
             this._drawEnemyIndicator(ctx, w, h, enemy, room);
           }
         }

@@ -27,7 +27,7 @@ export const ROOMS = [
   { id: 'beach_house', name: 'Beach House', connections: ['greenhouse', 'generator'], x: 0.8, y: 0.52, isOffice: false, isBlindSpot: false, enemyY: 0.5, enemyScale: 0.8 },
   { id: 'dock', name: 'Main Dock', connections: ['guest_house', 'office'], x: 0.2, y: 0.72, isOffice: false, isBlindSpot: true, enemyY: 0.5, enemyScale: 0.6 },
   { id: 'generator', name: 'Generator', connections: ['beach_house', 'office'], x: 0.8, y: 0.72, isOffice: false, isBlindSpot: true, enemyY: 0.5, enemyScale: 0.6 },
-  { id: 'central_street', name: 'Central Street', connections: ['staff_quarters', 'guest_house', 'greenhouse', 'office'], x: 0.5, y: 0.58, isOffice: false, isBlindSpot: false, enemyY: 0.5, enemyScale: 1.0 },
+  { id: 'central_street', name: 'Central Street', connections: ['staff_quarters', 'guest_house', 'greenhouse'], x: 0.5, y: 0.58, isOffice: false, isBlindSpot: false, enemyY: 0.5, enemyScale: 1.0 },
 ];
 
 /** @type {Record<string, Room>} - Quick lookup by ID */

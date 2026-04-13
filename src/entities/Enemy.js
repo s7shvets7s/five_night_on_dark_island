@@ -159,7 +159,7 @@ export class Enemy {
    * @returns {boolean} Whether return was triggered
    */
   tryReturn(force = false) {
-    if (this._state === ENEMY_STATES.RETURNING) {
+    if (this._state === ENEMY_STATES.RETURNING || this._state === ENEMY_STATES.IN_TRANSIT) {
       return false;
     }
 
@@ -170,7 +170,8 @@ export class Enemy {
       this._state = ENEMY_STATES.RETURNING;
       this._returnCooldown = config.returnCooldownMs;
       if (this._pathIndex > 0) {
-        this.moveBackward();
+        const transitTime = config.transitTimeMs * 0.6; // Faster return
+        this.startTransitBackward(transitTime);
       }
       return true;
     }
