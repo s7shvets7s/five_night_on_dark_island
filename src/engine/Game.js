@@ -103,8 +103,6 @@ export class Game {
     this._gameHeight = displayHeight;
 
     this._inputManager.updateResolution(this._gameWidth, this._gameHeight);
-
-    console.log(`[Game] Dynamic resize: ${displayWidth}x${displayHeight}`);
   }
 
   /** Bind resize listener with debounce */

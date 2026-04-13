@@ -156,6 +156,8 @@ export class Enemy {
 
   /**
    * Try to return to base (called on light or door block).
+   * Sets state to RETURNING — actual transit is handled by AI._updateReturning.
+   * @param {boolean} force - Bypass return chance check
    * @returns {boolean} Whether return was triggered
    */
   tryReturn(force = false) {
@@ -169,10 +171,7 @@ export class Enemy {
     if (Math.random() < chance && this._returnCooldown <= 0) {
       this._state = ENEMY_STATES.RETURNING;
       this._returnCooldown = config.returnCooldownMs;
-      if (this._pathIndex > 0) {
-        const transitTime = config.transitTimeMs * 0.6; // Faster return
-        this.startTransitBackward(transitTime);
-      }
+      // Transit is started by EnemyAI._updateReturning — don't start here
       return true;
     }
     return false;

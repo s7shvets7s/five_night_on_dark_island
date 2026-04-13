@@ -32,6 +32,11 @@ export class EnemyAI {
       return this._updateInTransit(enemy, config, dt);
     }
 
+    // RETURNING with transit in progress — must tick timer to complete transit
+    if (enemy.state === ENEMY_STATES.RETURNING && enemy.isMoving) {
+      return this._updateReturning(enemy, config, dt);
+    }
+
     if (enemy.isMoving) return null;
 
     const state = enemy.state;
@@ -67,6 +72,7 @@ export class EnemyAI {
     // If enemy reached the last room on path (door room), transition to AT_DOOR
     // This prevents enemy from endlessly patrolling at the door room
     if (enemy.pathIndex >= enemy.pathLength - 1) {
+      enemy.resetMoveTimer(); // Reset timer so AT_DOOR delay starts fresh
       enemy.setState(ENEMY_STATES.AT_DOOR);
       return 'moved';
     }
@@ -285,29 +291,46 @@ export class EnemyAI {
 
   /**
    * RETURNING: Moving backward to base.
+   * Waits for current transit to finish, then steps back one room at a time.
    * @param {Enemy} enemy
    * @param {Object} config
    * @param {number} dt
    * @returns {string|null}
    */
   _updateReturning(enemy, config, dt) {
-    // If not yet in transit, start it
-    if (enemy.state === ENEMY_STATES.RETURNING && !enemy.isInTransit) {
-      const returnSpeed = config.transitTimeMs * 0.6; // Faster return
-      const variance = config.transitTimeMs * 0.1;
-      const transitTime = returnSpeed + Math.random() * variance;
+    // Transit is in progress — tick the timer so it completes
+    if (enemy.isMoving) {
+      const completed = enemy.updateTransit(dt);
+      if (!completed) return null;
 
-      if (enemy.pathIndex > 0) {
-        enemy.startTransitBackward(transitTime);
-        this._emitReturn(enemy);
-        return 'returned';
-      } else {
+      // Transit completed — check if reached base
+      if (enemy.isAtBase()) {
         enemy.setState(ENEMY_STATES.PATROL);
-        return null;
+        enemy.resetMoveTimer();
+        return 'returned';
       }
+
+      // Not at base yet — continue returning next cycle
+      return 'returned';
     }
 
-    // If already in transit, the IN_TRANSIT handler will process it
+    // Transit completed — check if reached base
+    if (enemy.isAtBase()) {
+      enemy.setState(ENEMY_STATES.PATROL);
+      enemy.resetMoveTimer();
+      return null;
+    }
+
+    // Continue returning — start next step back
+    if (enemy.pathIndex > 0) {
+      const transitTime = config.transitTimeMs * 0.6; // Faster return
+      enemy.startTransitBackward(transitTime);
+      this._emitReturn(enemy);
+      return 'returned';
+    }
+
+    // Already at start of path but not at base — fallback
+    enemy.setState(ENEMY_STATES.PATROL);
     return null;
   }
 

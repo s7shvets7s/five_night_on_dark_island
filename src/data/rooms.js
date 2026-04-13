@@ -16,7 +16,6 @@
  */
 
 /** @type {Room[]} */
-console.log('[rooms.js] ROOMS count:', 10);
 export const ROOMS = [
   { id: 'office', name: 'Security Office', connections: ['dock', 'generator'], x: 0.5, y: 0.88, isOffice: true, isBlindSpot: false },
   { id: 'helipad', name: 'Helipad', connections: ['golden_temple'], x: 0.5, y: 0.05, isOffice: false, isBlindSpot: false, enemyY: 0.5, enemyScale: 1.0 },

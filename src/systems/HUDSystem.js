@@ -506,7 +506,6 @@ export class HUDSystem {
     const toMapY = (ry) => mapY + UI.PADDING + ry * (mapH - UI.PADDING * 2 - 24);
 
     const nodes = [];
-    console.log('[HUDSystem] Rooms for map:', Object.keys(rooms));
     for (const room of Object.values(rooms)) {
       if (room.isOffice) continue;
       nodes.push({
@@ -516,7 +515,6 @@ export class HUDSystem {
         r: 18,
       });
     }
-    console.log('[HUDSystem] Map nodes:', nodes.map(n => n.id));
     return nodes;
   }
 }

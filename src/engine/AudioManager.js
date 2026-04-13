@@ -258,6 +258,9 @@ export class AudioManager {
    * @param {number} volume - Volume 0-1
    */
   startCameraStaticNoise(volume = 0.1) {
+    if (!this._initialized) {
+      this.init();
+    }
     if (!this._initialized || this._muted) return;
     this.stopCameraStaticNoise();
 

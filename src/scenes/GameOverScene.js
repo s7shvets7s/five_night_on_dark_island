@@ -17,24 +17,26 @@ export class GameOverScene {
     this._retryNightId = DEFAULT_NIGHT_ID;
     this._adShowing = false;
 
-    eventBus.on('game:over', ({ nightId }) => {
+    this._onGameOver = ({ nightId }) => {
       this._retryNightId = nightId;
-    });
+    };
   }
 
   enter() {
     this._elapsed = 0;
     this._canInteract = false;
+    eventBus.on('game:over', this._onGameOver);
     this._bindInput();
   }
 
   exit() {
+    eventBus.off('game:over', this._onGameOver);
     this._inputManager.clearAll();
   }
 
   update(dt) {
     this._elapsed += dt * 1000;
-    if (this._elapsed > 2000) {
+    if (this._elapsed > 1500) {
       this._canInteract = true;
     }
   }
@@ -65,13 +67,19 @@ export class GameOverScene {
     ctx.font = `${fontSizeSub}px Courier New`;
     ctx.fillText(i18n.t('gameOverSubtitle'), w / 2, h * 0.48);
 
+    const fontSizeBody = Math.min(UI.FONT_BODY, h * 0.019);
     if (this._canInteract) {
       const pulse = 0.5 + Math.sin(Date.now() * 0.003) * 0.5;
       ctx.globalAlpha = 0.5 + pulse * 0.5;
-      const fontSizeBody = Math.min(UI.FONT_BODY, h * 0.019);
       ctx.fillStyle = COLORS.TEXT_PRIMARY;
       ctx.font = `${fontSizeBody}px Courier New`;
       ctx.fillText(i18n.t('gameOverRetry'), w / 2, h * 0.65);
+    } else {
+      const countdown = Math.ceil((1500 - this._elapsed) / 1000);
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = COLORS.TEXT_SECONDARY;
+      ctx.font = `${fontSizeBody}px Courier New`;
+      ctx.fillText(`... ${countdown}`, w / 2, h * 0.65);
     }
 
     ctx.globalAlpha = 1;
@@ -85,11 +93,15 @@ export class GameOverScene {
       if (this._canInteract && !this._adShowing) {
         this._adShowing = true;
 
-        // Show interstitial ad
-        const adShown = await this._ads?.showInterstitial();
+        try {
+          // Show interstitial ad
+          const adShown = await this._ads?.showInterstitial();
 
-        // Brief delay so user sees transition (ad may have been instant)
-        await new Promise(resolve => setTimeout(resolve, adShown ? 1500 : 500));
+          // Brief delay so user sees transition (ad may have been instant)
+          await new Promise(resolve => setTimeout(resolve, adShown ? 1500 : 500));
+        } finally {
+          this._adShowing = false;
+        }
 
         this._onSceneChange(SCENES.TITLE);
       }

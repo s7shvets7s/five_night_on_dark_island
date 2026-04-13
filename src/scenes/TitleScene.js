@@ -1,4 +1,4 @@
-import { SCENES, COLORS, UI, GAME_TITLE, gameState } from '../config/gameConfig.js';
+import { SCENES, COLORS, UI, GAME_TITLE, GAME_VERSION, gameState } from '../config/gameConfig.js';
 import { i18n } from '../i18n/index.js';
 import { eventBus } from '../engine/EventBus.js';
 
@@ -63,7 +63,7 @@ export class TitleScene {
     const fontSizeVer = Math.min(11, h * 0.015);
     ctx.fillStyle = '#333';
     ctx.font = `${fontSizeVer}px Courier New`;
-    ctx.fillText('v0.2.0', w / 2, h * 0.92);
+    ctx.fillText(`v${GAME_VERSION}`, w / 2, h * 0.92);
 
     ctx.fillStyle = '#2a2a2a';
     ctx.font = `${Math.max(9, h * 0.012)}px Courier New`;

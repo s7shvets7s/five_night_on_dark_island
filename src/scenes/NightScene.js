@@ -353,7 +353,6 @@ export class NightScene {
 
     this._renderDoorButtons(ctx, w, h);
     this._renderLightButtons(ctx, w, h);
-    this._hudSystem.renderMaskButton(ctx, w, h, this._maskActive, this._maskCooldown);
     this._renderGeneratorButton(ctx, w, h);
 
     if (this._generatorMiniGame.isShowingMenu) {
@@ -776,7 +775,7 @@ export class NightScene {
     this._sfxManager?.play('powerOut');
   }
 
-  _onJumpscare(enemy) {
+  async _onJumpscare(enemy) {
     // Rare event: show ad instead of jumpscare — enemy "escapes"
     if (!this._adShowing && Math.random() < RANDOM_AD_CHANCE) {
       this._adShowing = true;
@@ -786,8 +785,11 @@ export class NightScene {
       if (enemy.pathIndex > 0) {
         enemy.startTransitBackward(2000);
       }
-      this._ads?.showInterstitial();
-      this._adShowing = false;
+      try {
+        await this._ads?.showInterstitial();
+      } finally {
+        this._adShowing = false;
+      }
       return; // No jumpscare, game continues
     }
 

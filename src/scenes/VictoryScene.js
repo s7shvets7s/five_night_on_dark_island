@@ -24,18 +24,20 @@ export class VictoryScene {
     this._canInteract = false;
     this._adShowing = false;
 
-    eventBus.on('game:victory', ({ night }) => {
+    this._onVictory = ({ night }) => {
       this._nightId = night;
-    });
+    };
   }
 
   enter() {
     this._elapsed = 0;
     this._canInteract = false;
+    eventBus.on('game:victory', this._onVictory);
     this._bindInput();
   }
 
   exit() {
+    eventBus.off('game:victory', this._onVictory);
     this._inputManager.clearAll();
   }
 
@@ -44,7 +46,7 @@ export class VictoryScene {
    */
   update(dt) {
     this._elapsed += dt * 1000;
-    if (this._elapsed > 3000) {
+    if (this._elapsed > 1500) {
       this._canInteract = true;
     }
   }
@@ -83,13 +85,19 @@ export class VictoryScene {
     ctx.font = `${fontSizeBody}px Courier New`;
     ctx.fillText(i18n.t('victorySurvived'), w / 2, h * 0.55);
 
-    // Continue prompt
+    // Continue prompt with countdown
     if (this._canInteract) {
       const pulse = 0.5 + Math.sin(Date.now() * 0.003) * 0.5;
       ctx.globalAlpha = 0.5 + pulse * 0.5;
       ctx.fillStyle = COLORS.TEXT_PRIMARY;
       ctx.font = `${fontSizeBody}px Courier New`;
       ctx.fillText(i18n.t('victoryClickFor') + ' ' + i18n.t('menuPlay'), w / 2, h * 0.7);
+    } else {
+      const countdown = Math.ceil((1500 - this._elapsed) / 1000);
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = COLORS.TEXT_SECONDARY;
+      ctx.font = `${fontSizeBody}px Courier New`;
+      ctx.fillText(`... ${countdown}`, w / 2, h * 0.7);
     }
 
     ctx.globalAlpha = 1;
@@ -102,7 +110,11 @@ export class VictoryScene {
     this._inputManager.on('pointerdown', async () => {
       if (this._canInteract && !this._adShowing) {
         this._adShowing = true;
-        await this._ads?.showInterstitial();
+        try {
+          await this._ads?.showInterstitial();
+        } finally {
+          this._adShowing = false;
+        }
         this._onSceneChange(SCENES.TITLE);
       }
     });
