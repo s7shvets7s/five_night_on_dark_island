@@ -398,6 +398,9 @@ export class NightScene {
       bgKey = 'office_bg_right_dor_slose';
     }
 
+    // Render enemies UNDER the background (they'll peek through door cutouts)
+    this._renderDoorEnemies(ctx, officeX, officeW, w, h, leftClosed, rightClosed);
+
     const bgImage = this._assetLoader?.getImage(bgKey);
     if (bgImage && bgImage.complete && bgImage.naturalWidth > 0) {
       ctx.drawImage(bgImage, officeX, 0, officeW, h);
@@ -405,8 +408,6 @@ export class NightScene {
       ctx.fillStyle = '#222';
       ctx.fillRect(officeX, 0, officeW, h);
     }
-
-    this._renderDoorEnemies(ctx, officeX, w, h, leftClosed, rightClosed);
 
     ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
     ctx.font = '10px Courier New';
@@ -416,7 +417,7 @@ export class NightScene {
     ctx.restore();
   }
 
-  _renderDoorEnemies(ctx, officeX, w, h, leftClosed, rightClosed) {
+  _renderDoorEnemies(ctx, officeX, officeW, w, h, leftClosed, rightClosed) {
     const leftDoorRoom = 'dock';
     const rightDoorRoom = 'generator';
 
@@ -427,11 +428,11 @@ export class NightScene {
 
       if (enemy.currentRoom === leftDoorRoom && !leftClosed) {
         const lightOn = this._officeSystem.leftLightOn;
-        this._renderEnemyAtDoor(ctx, 'left', officeX, w, h, lightOn);
+        this._renderEnemyAtDoor(ctx, 'left', officeX, officeW, w, h, lightOn);
       }
       if (enemy.currentRoom === rightDoorRoom && !rightClosed) {
         const lightOn = this._officeSystem.rightLightOn;
-        this._renderEnemyAtDoor(ctx, 'right', officeX, w, h, lightOn);
+        this._renderEnemyAtDoor(ctx, 'right', officeX, officeW, w, h, lightOn);
       }
     }
   }
@@ -467,14 +468,16 @@ export class NightScene {
   /**
    * Render enemy at door if light reveals one.
    * Light ON → bright sprite. Light OFF → dark silhouette + noise.
+   * Enemy is rendered UNDER the office background, peeking through door cutouts.
    * @param {CanvasRenderingContext2D} ctx
    * @param {'left'|'right'} side
-   * @param {number} officeX
-   * @param {number} w
-   * @param {number} h
+   * @param {number} officeX - background X offset on canvas
+   * @param {number} officeW - background rendered width
+   * @param {number} w - canvas width
+   * @param {number} h - canvas height
    * @param {boolean} [lightOn]
    */
-  _renderEnemyAtDoor(ctx, side, officeX, w, h, lightOn = false) {
+  _renderEnemyAtDoor(ctx, side, officeX, officeW, w, h, lightOn = false) {
     const doorRoom = side === 'left' ? 'dock' : 'generator';
     const enemy = this._enemies.find(e => e.currentRoom === doorRoom && !e.isDefeated && e.state === ENEMY_STATES.AT_DOOR);
     if (!enemy) return;
@@ -482,9 +485,10 @@ export class NightScene {
     const doorPos = side === 'left' ? DOOR_POSITIONS_PERCENT.left : DOOR_POSITIONS_PERCENT.right;
     const enemyOffset = enemy.doorOffset;
 
-    const x = (doorPos.x * w) + (enemyOffset.x * w / DOOR_IMAGE_SIZE.width);
+    // Position relative to the stretched background
+    const x = officeX + (doorPos.x * officeW) + (enemyOffset.x * officeW / DOOR_IMAGE_SIZE.width);
     const y = (doorPos.y * h) + (enemyOffset.y * h / DOOR_IMAGE_SIZE.height);
-    const size = w * 0.07;
+    const size = w * 0.035;
 
     if (lightOn) {
       // Light ON — render bright sprite
@@ -762,6 +766,7 @@ export class NightScene {
     this._hudSystem.updateState({
       powerPercent: this._powerSystem.getPowerPercent(),
       currentTime: this._clockSystem.displayTime,
+      nightId: this._nightId,
       cameraActive: this._cameraSystem.isActive,
       glitchedCamera: this._glitchMiniGame.glitchedCamera,
     });

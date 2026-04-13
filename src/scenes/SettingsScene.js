@@ -17,12 +17,10 @@ export class SettingsScene {
   enter() {
     this._bindInput();
     i18n.setLocale(gameState.getLocale());
-    i18n.onChange(() => this._render());
   }
 
   exit() {
     this._inputManager.clearAll();
-    i18n.offChange(() => this._render());
   }
 
   update(dt) {}
@@ -31,6 +29,8 @@ export class SettingsScene {
     const fw = Number(w);
     const fh = Number(h);
     if (!isFinite(fw) || !isFinite(fh) || fw < 1 || fh < 1) return;
+
+    this._buttons = [];
 
     ctx.fillStyle = '#0a0a0a';
     ctx.fillRect(0, 0, fw, fh);
@@ -84,7 +84,6 @@ export class SettingsScene {
       action: () => {
         i18n.setLocale(nextLocale);
         gameState.setLocale(nextLocale);
-        window.location.reload();
       },
       enabled: true,
     });

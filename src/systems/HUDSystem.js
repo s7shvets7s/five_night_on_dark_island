@@ -14,6 +14,7 @@ export class HUDSystem {
     this._eventBus = eventBus;
     this._powerPercent = 100;
     this._currentTime = '12 AM';
+    this._nightId = 1;
     this._cameraActive = false;
     this._showCameraMap = false;
     this._glitchedCamera = null;
@@ -26,6 +27,7 @@ export class HUDSystem {
   updateState(state) {
     if (state.powerPercent !== undefined) this._powerPercent = state.powerPercent;
     if (state.currentTime !== undefined) this._currentTime = state.currentTime;
+    if (state.nightId !== undefined) this._nightId = state.nightId;
     if (state.cameraActive !== undefined) this._cameraActive = state.cameraActive;
     if (state.showCameraMap !== undefined) this._showCameraMap = state.showCameraMap;
     if (state.glitchedCamera !== undefined) this._glitchedCamera = state.glitchedCamera;
@@ -296,11 +298,23 @@ export class HUDSystem {
   }
 
   _drawClock(ctx, w, h) {
-    ctx.fillStyle = COLORS.TEXT_PRIMARY;
+    const nightLabel = i18n.t('hudNight', { night: this._nightId });
+    const clockX = w - UI.PADDING;
+    const clockY = UI.PADDING;
+
+    // Measure night label width
     ctx.font = `bold ${UI.FONT_SUBTITLE}px Courier New`;
+    const nightW = ctx.measureText(nightLabel).width;
+
+    // Night label — left of clock, same font size
+    ctx.fillStyle = COLORS.TEXT_SECONDARY;
     ctx.textAlign = 'right';
     ctx.textBaseline = 'top';
-    ctx.fillText(this._currentTime, w - UI.PADDING, UI.PADDING);
+    ctx.fillText(nightLabel, clockX - nightW - 20, clockY);
+
+    ctx.fillStyle = COLORS.TEXT_PRIMARY;
+    ctx.textAlign = 'right';
+    ctx.fillText(this._currentTime, clockX, clockY);
   }
 
   _drawCameraToggle(ctx, w, h) {

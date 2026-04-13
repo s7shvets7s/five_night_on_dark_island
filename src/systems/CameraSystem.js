@@ -234,40 +234,56 @@ export class CameraSystem {
 
     const drawSize = size * 2;
 
+    // Animation: swaying + tilting (unique per enemy via seed)
+    const seed = enemy.id.charCodeAt(0) * 137 + (enemy.id.charCodeAt(1) || 0) * 251;
+    const swaySpeed = 0.002 + (seed % 100) * 0.00001;
+    const swayAmount = 0.03;
+    const swayOffset = Math.sin(Date.now() * swaySpeed + seed) * swayAmount * drawSize;
+    const tiltAngle = Math.sin(Date.now() * swaySpeed * 0.7 + seed) * 0.08;
+
     if (sprite && sprite.complete && sprite.naturalWidth > 0) {
       const brightness = CONFIG.CAMERA_ENEMY_BRIGHTNESS;
       const saturation = CONFIG.CAMERA_ENEMY_SATURATION;
+      ctx.save();
       ctx.filter = `brightness(${brightness}) saturate(${saturation}%)`;
-      ctx.drawImage(sprite, x - drawSize / 2, y - drawSize / 2, drawSize, drawSize);
-      ctx.filter = 'none';
+      ctx.translate(x, y);
+      ctx.rotate(tiltAngle);
+      ctx.drawImage(sprite, -drawSize / 2 + swayOffset, -drawSize / 2, drawSize, drawSize);
+      ctx.restore();
     } else {
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(tiltAngle);
+
       ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
       ctx.beginPath();
-      ctx.ellipse(x, y + size * 0.6, size * 0.5, size * 0.15, 0, 0, Math.PI * 2);
+      ctx.ellipse(swayOffset, size * 0.6, size * 0.5, size * 0.15, 0, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.fillStyle = enemy.color || '#ff0000';
       ctx.beginPath();
-      ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+      ctx.arc(swayOffset, 0, size / 2, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(x - 6, y - 5, 4, 0, Math.PI * 2);
-      ctx.arc(x + 6, y - 5, 4, 0, Math.PI * 2);
+      ctx.arc(swayOffset - 6, -5, 4, 0, Math.PI * 2);
+      ctx.arc(swayOffset + 6, -5, 4, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.fillStyle = '#000000';
       ctx.beginPath();
-      ctx.arc(x - 5, y - 5, 2, 0, Math.PI * 2);
-      ctx.arc(x + 7, y - 5, 2, 0, Math.PI * 2);
+      ctx.arc(swayOffset - 5, -5, 2, 0, Math.PI * 2);
+      ctx.arc(swayOffset + 7, -5, 2, 0, Math.PI * 2);
       ctx.fill();
 
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 13px Courier New';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
-      ctx.fillText(enemy.name, x, y + size * 0.5 + 5);
+      ctx.fillText(enemy.name, swayOffset, size * 0.5 + 5);
+
+      ctx.restore();
     }
   }
 }

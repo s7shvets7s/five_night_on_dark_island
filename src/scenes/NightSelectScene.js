@@ -72,7 +72,7 @@ export class NightSelectScene {
       let bgColor = COLORS.UI_BG;
       let textColor = COLORS.TEXT_PRIMARY;
       let borderColor = COLORS.UI_BORDER;
-      const label = night.name;
+      const label = i18n.t('nightN', { night: night.id });
       let sublabel = '';
 
       if (!isUnlocked) {

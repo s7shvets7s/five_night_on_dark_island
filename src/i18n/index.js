@@ -9,6 +9,7 @@ const TRANSLATIONS = {
     nightSelectTitle: 'ВЫБОР НОЧИ',
     nightLocked: 'ЗАБЛОКИРОВАНО',
     nightComplete: 'ПРОЙДЕНА',
+    nightN: 'Ночь {{night}}',
     nightAvailable: 'ДОСТУПНА',
 
     // Settings
@@ -21,6 +22,7 @@ const TRANSLATIONS = {
 
     // Game HUD
     hudPower: 'Энергия',
+    hudNight: 'Ночь {{night}}',
     hudOpenCamera: 'Открыть камеры',
     hudCloseCamera: 'Закрыть камеры',
     hudDoor: 'ДВЕРЬ',
@@ -91,6 +93,7 @@ const TRANSLATIONS = {
     nightSelectTitle: 'SELECT NIGHT',
     nightLocked: 'LOCKED',
     nightComplete: 'COMPLETE',
+    nightN: 'Night {{night}}',
     nightAvailable: 'AVAILABLE',
 
     // Settings
@@ -103,6 +106,7 @@ const TRANSLATIONS = {
 
     // Game HUD
     hudPower: 'Power',
+    hudNight: 'Night {{night}}',
     hudOpenCamera: 'Open Camera',
     hudCloseCamera: 'Close Camera',
     hudDoor: 'DOOR',
@@ -182,9 +186,15 @@ class I18n {
     return this._locale;
   }
 
-  t(key) {
+  t(key, params) {
     const dict = TRANSLATIONS[this._locale];
-    return dict[key] || key;
+    let text = dict[key] || key;
+    if (params) {
+      for (const [k, v] of Object.entries(params)) {
+        text = text.replace(`{{${k}}}`, v);
+      }
+    }
+    return text;
   }
 
   onChange(callback) {
