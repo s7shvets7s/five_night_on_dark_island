@@ -9,7 +9,7 @@ import { GameOverScene } from './scenes/GameOverScene.js';
 import { VictoryScene } from './scenes/VictoryScene.js';
 import { PauseScene } from './scenes/PauseScene.js';
 import { ConfirmExitScene } from './scenes/ConfirmExitScene.js';
-import { AudioManager } from './engine/AudioManager.js';
+import { AudioManager } from './engine/AudioManager.js?v=14';
 import { eventBus } from './engine/EventBus.js';
 import { i18n } from './i18n/index.js';
 import { gameState } from './config/gameConfig.js';
@@ -109,6 +109,21 @@ async function bootstrap() {
   } catch (e) {
     console.log('[Bootstrap] Assets load error (using placeholders)');
   }
+
+  const musicTracks = [
+    'assets/audio/music/toybox.ogg',
+    'assets/audio/music/smallheart.ogg',
+    'assets/audio/music/monster.ogg',
+    'assets/audio/music/eyes-piercing-shadow.ogg',
+    'assets/audio/music/as-the-light-fades.ogg',
+  ];
+  audioManager.setPlaylist(musicTracks);
+  audioManager.setMusicVolume(gameState.getMusicVolume());
+
+  document.addEventListener('click', () => {
+    audioManager.init();
+    audioManager.playMusic();
+  }, { once: true });
 
   game.start();
   console.log(`[Bootstrap] ${GAME_TITLE} v${GAME_VERSION} started`);

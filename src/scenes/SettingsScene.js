@@ -8,7 +8,8 @@ export class SettingsScene {
     this._inputManager = inputManager;
     this._audioManager = audioManager;
     this._buttons = [];
-    this._draggingVolume = false;
+    this._draggingMaster = false;
+    this._draggingMusic = false;
   }
 
   enter() {
@@ -47,17 +48,17 @@ export class SettingsScene {
     ctx.fillText(i18n.t('settingsTitle'), w / 2, h * 0.1);
 
     this._renderLanguageButtons(ctx, w, h);
-    this._renderVolumeSlider(ctx, w, h);
+    this._renderMasterVolumeSlider(ctx, w, h);
+    this._renderMusicVolumeSlider(ctx, w, h);
     this._renderBackButton(ctx, w, h);
 
     this._drawScanlines(ctx, w, h);
   }
 
   _renderLanguageButtons(ctx, w, h) {
-    const btnW = Math.min(100, w * 0.15);
+    const btnW = Math.min(120, w * 0.2);
     const btnH = Math.max(40, h * 0.06);
     const startY = h * 0.25;
-    const gap = 16;
 
     ctx.fillStyle = COLORS.TEXT_SECONDARY;
     ctx.font = `${Math.min(14, h * 0.02)}px Courier New`;
@@ -65,48 +66,40 @@ export class SettingsScene {
     ctx.textBaseline = 'middle';
     ctx.fillText(i18n.t('settingsLanguage') + ':', w * 0.25, startY + btnH / 2);
 
-    const languages = [
-      { code: 'ru', label: 'Русский' },
-      { code: 'en', label: 'English' },
-    ];
+    const currentLocale = i18n.getLocale();
+    const nextLocale = currentLocale === 'ru' ? 'en' : 'ru';
+    const label = currentLocale === 'ru' ? 'English' : 'Русский';
 
     const btnX = w * 0.55;
 
-    languages.forEach((lang, i) => {
-      const btnY = startY + i * (btnH + gap);
-
-      this._buttons.push({
-        label: 'lang_' + lang.code,
-        x: btnX,
-        y: btnY,
-        w: btnW,
-        h: btnH,
-        action: () => {
-          i18n.setLocale(lang.code);
-          gameState.setLocale(lang.code);
-        },
-        enabled: true,
-      });
-
-      const isActive = gameState.getLocale() === lang.code;
-      const bgColor = isActive ? '#2a2a2a' : COLORS.UI_BG;
-      const borderColor = isActive ? COLORS.ACCENT_RED : COLORS.UI_BORDER;
-
-      ctx.fillStyle = bgColor;
-      ctx.fillRect(btnX, btnY, btnW, btnH);
-      ctx.strokeStyle = borderColor;
-      ctx.lineWidth = isActive ? 2 : 1;
-      ctx.strokeRect(btnX, btnY, btnW, btnH);
-
-      ctx.fillStyle = isActive ? COLORS.TEXT_PRIMARY : COLORS.TEXT_SECONDARY;
-      ctx.font = `bold ${Math.min(12, h * 0.016)}px Courier New`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(lang.label, btnX + btnW / 2, btnY + btnH / 2);
+    this._buttons.push({
+      label: 'lang_toggle',
+      x: btnX,
+      y: startY,
+      w: btnW,
+      h: btnH,
+      action: () => {
+        i18n.setLocale(nextLocale);
+        gameState.setLocale(nextLocale);
+        window.location.reload();
+      },
+      enabled: true,
     });
+
+    ctx.fillStyle = COLORS.UI_BG;
+    ctx.fillRect(btnX, startY, btnW, btnH);
+    ctx.strokeStyle = COLORS.ACCENT_RED;
+    ctx.lineWidth = 2;
+    ctx.strokeRect(btnX, startY, btnW, btnH);
+
+    ctx.fillStyle = COLORS.TEXT_PRIMARY;
+    ctx.font = `bold ${Math.min(12, h * 0.016)}px Courier New`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, btnX + btnW / 2, startY + btnH / 2);
   }
 
-  _renderVolumeSlider(ctx, w, h) {
+  _renderMasterVolumeSlider(ctx, w, h) {
     const sliderW = Math.min(200, w * 0.4);
     const sliderH = 8;
     const startY = h * 0.42;
@@ -121,7 +114,7 @@ export class SettingsScene {
     const sliderX = w * 0.55;
     const sliderY = startY + knobR - sliderH / 2;
 
-    this._volumeSlider = {
+    this._masterSlider = {
       x: sliderX,
       y: sliderY,
       w: sliderW,
@@ -132,6 +125,53 @@ export class SettingsScene {
     ctx.fillRect(sliderX, sliderY, sliderW, sliderH);
 
     const volume = gameState.getVolume();
+    const fillW = volume * sliderW;
+    ctx.fillStyle = COLORS.ACCENT_RED;
+    ctx.fillRect(sliderX, sliderY, fillW, sliderH);
+
+    ctx.strokeStyle = COLORS.UI_BORDER;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(sliderX, sliderY, sliderW, sliderH);
+
+    const knobX = sliderX + fillW;
+    ctx.fillStyle = COLORS.TEXT_PRIMARY;
+    ctx.beginPath();
+    ctx.arc(knobX, sliderY + sliderH / 2, knobR, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#000000';
+    ctx.font = `${Math.min(10, h * 0.014)}px Courier New`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(Math.round(volume * 100) + '%', knobX, sliderY + sliderH / 2);
+  }
+
+  _renderMusicVolumeSlider(ctx, w, h) {
+    const sliderW = Math.min(200, w * 0.4);
+    const sliderH = 8;
+    const startY = h * 0.54;
+    const knobR = 12;
+
+    ctx.fillStyle = COLORS.TEXT_SECONDARY;
+    ctx.font = `${Math.min(14, h * 0.02)}px Courier New`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(i18n.t('settingsMusic') + ':', w * 0.25, startY + knobR);
+
+    const sliderX = w * 0.55;
+    const sliderY = startY + knobR - sliderH / 2;
+
+    this._musicSlider = {
+      x: sliderX,
+      y: sliderY,
+      w: sliderW,
+      h: sliderH,
+    };
+
+    ctx.fillStyle = '#1a1a1a';
+    ctx.fillRect(sliderX, sliderY, sliderW, sliderH);
+
+    const volume = gameState.getMusicVolume();
     const fillW = volume * sliderW;
     ctx.fillStyle = COLORS.ACCENT_RED;
     ctx.fillRect(sliderX, sliderY, fillW, sliderH);
@@ -192,11 +232,20 @@ export class SettingsScene {
 
   _bindInput() {
     this._inputManager.on('pointerdown', (x, y) => {
-      if (this._volumeSlider) {
-        const s = this._volumeSlider;
+      if (this._masterSlider) {
+        const s = this._masterSlider;
         if (x >= s.x && x <= s.x + s.w && y >= s.y - 10 && y <= s.y + s.h + 10) {
-          this._draggingVolume = true;
-          this._updateVolume(x);
+          this._draggingMaster = true;
+          this._updateMasterVolume(x);
+          return;
+        }
+      }
+
+      if (this._musicSlider) {
+        const s = this._musicSlider;
+        if (x >= s.x && x <= s.x + s.w && y >= s.y - 10 && y <= s.y + s.h + 10) {
+          this._draggingMusic = true;
+          this._updateMusicVolume(x);
           return;
         }
       }
@@ -212,18 +261,22 @@ export class SettingsScene {
     });
 
     this._inputManager.on('pointermove', (x, y) => {
-      if (this._draggingVolume) {
-        this._updateVolume(x);
+      if (this._draggingMaster) {
+        this._updateMasterVolume(x);
+      }
+      if (this._draggingMusic) {
+        this._updateMusicVolume(x);
       }
     });
 
     this._inputManager.on('pointerup', () => {
-      this._draggingVolume = false;
+      this._draggingMaster = false;
+      this._draggingMusic = false;
     });
   }
 
-  _updateVolume(x) {
-    const s = this._volumeSlider;
+  _updateMasterVolume(x) {
+    const s = this._masterSlider;
     if (!s) return;
 
     let vol = (x - s.x) / s.w;
@@ -232,6 +285,19 @@ export class SettingsScene {
 
     if (this._audioManager) {
       this._audioManager.setMasterVolume(vol);
+    }
+  }
+
+  _updateMusicVolume(x) {
+    const s = this._musicSlider;
+    if (!s) return;
+
+    let vol = (x - s.x) / s.w;
+    vol = Math.max(0, Math.min(1, vol));
+    gameState.setMusicVolume(vol);
+
+    if (this._audioManager) {
+      this._audioManager.setMusicVolume(vol);
     }
   }
 }

@@ -7,13 +7,18 @@ export class AudioManager {
     this._ctx = null;
     this._masterGain = null;
     this._sfxGain = null;
+    this._musicGain = null;
     this._ambienceGain = null;
     this._masterVolume = 0.7;
     this._sfxVolume = 0.8;
+    this._musicVolume = 0.5;
     this._ambienceVolume = 0.5;
     this._muted = false;
     this._activeLoops = new Map();
     this._initialized = false;
+    this._playlist = [];
+    this._playlistIndex = 0;
+    this._currentMusic = null;
   }
 
   /** Initialize Web Audio context (call on first user interaction) */
@@ -28,6 +33,10 @@ export class AudioManager {
       this._sfxGain = this._ctx.createGain();
       this._sfxGain.gain.value = this._sfxVolume;
       this._sfxGain.connect(this._masterGain);
+
+      this._musicGain = this._ctx.createGain();
+      this._musicGain.gain.value = this._musicVolume;
+      this._musicGain.connect(this._masterGain);
 
       this._ambienceGain = this._ctx.createGain();
       this._ambienceGain.gain.value = this._ambienceVolume;
@@ -117,6 +126,81 @@ export class AudioManager {
     this._ambienceVolume = Math.max(0, Math.min(1, vol));
     for (const audio of this._activeLoops.values()) {
       audio.volume = this._ambienceVolume;
+    }
+  }
+
+  /** Set music volume (0-1) */
+  setMusicVolume(vol) {
+    this._musicVolume = Math.max(0, Math.min(1, vol));
+    if (this._musicGain) {
+      this._musicGain.gain.value = this._musicVolume;
+    }
+    if (this._currentMusic) {
+      this._currentMusic.volume = this._musicVolume;
+    }
+  }
+
+  /** @returns {number} */
+  get musicVolume() { return this._musicVolume; }
+
+  /** Shuffle array using Fisher-Yates algorithm */
+  _shuffleArray(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  }
+
+  /** Set playlist of music tracks */
+  setPlaylist(tracks) {
+    this._playlist = [...tracks];
+    this._shuffleArray(this._playlist);
+    this._playlistIndex = 0;
+  }
+
+  /** Play music playlist (loops infinitely in random order) */
+  playMusic() {
+    if (this._muted || this._playlist.length === 0) return;
+    if (!this._initialized) {
+      this.init();
+    }
+    this._playNextTrack();
+  }
+
+  /** Play next track in playlist */
+  _playNextTrack() {
+    if (!this._initialized || this._playlist.length === 0) return;
+
+    if (this._currentMusic) {
+      this._currentMusic.pause();
+      this._currentMusic.src = '';
+      this._currentMusic = null;
+    }
+
+    const trackSrc = this._playlist[this._playlistIndex];
+    this._currentMusic = new Audio(trackSrc);
+    this._currentMusic.loop = false;
+    this._currentMusic.volume = this._musicVolume;
+
+    this._currentMusic.addEventListener('ended', () => {
+      this._playlistIndex++;
+      if (this._playlistIndex >= this._playlist.length) {
+        this._shuffleArray(this._playlist);
+        this._playlistIndex = 0;
+      }
+      this._playNextTrack();
+    });
+
+    this._currentMusic.play().catch(() => {});
+  }
+
+  /** Stop music */
+  stopMusic() {
+    if (this._currentMusic) {
+      this._currentMusic.pause();
+      this._currentMusic.src = '';
+      this._currentMusic = null;
     }
   }
 

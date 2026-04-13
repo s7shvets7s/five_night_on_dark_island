@@ -64,6 +64,10 @@ export class TitleScene {
     ctx.font = `${fontSizeVer}px Courier New`;
     ctx.fillText('v0.2.0', w / 2, h * 0.92);
 
+    ctx.fillStyle = '#2a2a2a';
+    ctx.font = `${Math.max(9, h * 0.012)}px Courier New`;
+    ctx.fillText('Music: Retro Indie Josh (CC BY 4.0)', w / 2, h * 0.96);
+
     this._drawScanlines(ctx, w, h);
   }
 
@@ -116,6 +120,7 @@ export class TitleScene {
           return;
         }
       }
+      this._onSceneChange(SCENES.NIGHT_SELECT);
     });
 
     this._inputManager.on('keydown', (key) => {

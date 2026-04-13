@@ -120,6 +120,7 @@ export const gameState = {
   _unlockedNight: 1,
   _completedNights: new Set(),
   _volume: 0.7,
+  _musicVolume: 0.5,
   _locale: 'ru',
 
   getUnlockedNight() {
@@ -151,6 +152,14 @@ export const gameState = {
 
   setVolume(vol) {
     this._volume = Math.max(0, Math.min(1, vol));
+  },
+
+  getMusicVolume() {
+    return this._musicVolume;
+  },
+
+  setMusicVolume(vol) {
+    this._musicVolume = Math.max(0, Math.min(1, vol));
   },
 
   getLocale() {
