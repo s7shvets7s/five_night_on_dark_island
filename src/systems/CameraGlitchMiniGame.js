@@ -167,15 +167,15 @@ export class CameraGlitchMiniGame {
       return false;
     }
 
-    // Try each circle with generous hitbox
+    // Try each circle with precise circular hitbox
     for (const circle of this._circles) {
       const cx = circle.x;
       const cy = circle.y;
-      const r = circle.r;
+      const hitR = circle.r + 0.005; // visual radius + small padding
 
-      // Simple box hit detection first
-      const hitBox = 0.15;
-      if (x >= cx - hitBox && x <= cx + hitBox && y >= cy - hitBox && y <= cy + hitBox) {
+      const dx = x - cx;
+      const dy = y - cy;
+      if (dx * dx + dy * dy <= hitR * hitR) {
         const expectedValue = this._numbers[this._currentIndex];
         if (circle.value === expectedValue) {
           this._currentIndex++;

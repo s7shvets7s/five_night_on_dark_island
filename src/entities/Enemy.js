@@ -1,5 +1,6 @@
 /**
- * Enemy — entity with position, state, patrol/return logic.
+ * Enemy — entity with graph-based wandering, state, and door approach.
+ * No fixed path — enemy chooses random rooms via connections.
  */
 import { ENEMY_STATES, ENEMY_CONFIG } from '../config/enemyConfig.js';
 
@@ -7,7 +8,7 @@ export class Enemy {
   /**
    * @param {Object} deps
    * @param {string} deps.id - Enemy ID (matches ENEMY_CONFIG key)
-   * @param {string} deps.startRoom - Starting room ID
+   * @param {string} [deps.startRoom] - Starting room ID (defaults to baseRoom)
    * @param {number} [deps.aggression] - Initial aggression (0-20)
    */
   constructor({ id, startRoom, aggression = 0 }) {
@@ -21,14 +22,13 @@ export class Enemy {
     this._color = config.color;
     this._sprites = config.sprites;
     this._baseRoom = config.baseRoom;
-    this._doorRoom = config.doorRoom;
     this._doorSide = config.doorSide;
     this._doorOffset = config.doorOffset;
-    this._path = config.path;
+    this._possibleDoors = [...config.possibleDoors];
 
     this._currentRoom = startRoom || config.baseRoom;
     this._previousRoom = null;
-    this._pathIndex = this._path.indexOf(this._currentRoom);
+    this._visitedRooms = new Set([this._currentRoom]);
 
     this._state = config.initialState;
     this._aggression = Math.max(0, Math.min(20, aggression));
@@ -41,9 +41,19 @@ export class Enemy {
 
     // Transit state — enemy is "in the corridor" between rooms
     this._transitTargetRoom = null;
-    this._transitTargetPathIndex = -1;
     this._transitDuration = 0;
     this._transitTimer = 0;
+
+    // Current target door — chosen dynamically when enemy decides to approach a door
+    this._targetDoor = null;
+
+    // Exposure timers — accumulate when enemy is subjected to light/door/mask
+    this._lightExposureTimer = 0;
+    this._doorExposureTimer = 0;
+    this._maskExposureTimer = 0;
+
+    // Camera X position — randomized each time enemy enters a room
+    this._cameraX = null;
   }
 
   /**
@@ -53,17 +63,21 @@ export class Enemy {
     const config = ENEMY_CONFIG[this._id];
     this._currentRoom = config.baseRoom;
     this._previousRoom = null;
-    this._pathIndex = 0;
+    this._visitedRooms = new Set([this._currentRoom]);
     this._state = config.initialState;
     this._moveTimer = 0;
     this._isMoving = false;
     this._returnCooldown = 0;
     this._isDefeated = false;
+    this._targetDoor = null;
 
     this._transitTargetRoom = null;
-    this._transitTargetPathIndex = -1;
     this._transitDuration = 0;
     this._transitTimer = 0;
+
+    this._lightExposureTimer = 0;
+    this._doorExposureTimer = 0;
+    this._maskExposureTimer = 0;
   }
 
   /**
@@ -75,36 +89,17 @@ export class Enemy {
   }
 
   /**
-   * Start transit forward on path (approaching).
+   * Start transit to a specific room.
    * Enemy becomes IN_TRANSIT and is invisible during the transition.
+   * @param {string} targetRoomId - Room ID to transit to
    * @param {number} transitDurationMs - Duration of transit in ms
    * @returns {boolean} Whether transit was started
    */
-  startTransitForward(transitDurationMs) {
-    if (this._pathIndex >= this._path.length - 1) {
-      return false;
-    }
-    this._previousRoom = this._currentRoom;
-    this._transitTargetPathIndex = this._pathIndex + 1;
-    this._transitTargetRoom = this._path[this._transitTargetPathIndex];
-    this._transitDuration = transitDurationMs;
-    this._transitTimer = 0;
-    this._isMoving = true;
-    return true;
-  }
+  startTransitTo(targetRoomId, transitDurationMs) {
+    if (this._isMoving) return false;
 
-  /**
-   * Start transit backward on path (returning to base).
-   * @param {number} transitDurationMs - Duration of transit in ms
-   * @returns {boolean} Whether transit was started
-   */
-  startTransitBackward(transitDurationMs) {
-    if (this._pathIndex <= 0) {
-      return false;
-    }
     this._previousRoom = this._currentRoom;
-    this._transitTargetPathIndex = this._pathIndex - 1;
-    this._transitTargetRoom = this._path[this._transitTargetPathIndex];
+    this._transitTargetRoom = targetRoomId;
     this._transitDuration = transitDurationMs;
     this._transitTimer = 0;
     this._isMoving = true;
@@ -129,18 +124,15 @@ export class Enemy {
 
   /**
    * Complete the transit — move enemy to target room.
-   * @returns {number} New path index
    */
   _completeTransit() {
-    this._pathIndex = this._transitTargetPathIndex;
     this._currentRoom = this._transitTargetRoom;
+    this._visitedRooms.add(this._currentRoom);
     this._isMoving = false;
     this._transitTargetRoom = null;
-    this._transitTargetPathIndex = -1;
     this._transitDuration = 0;
     this._transitTimer = 0;
     this._moveTimer = 0;
-    return this._pathIndex;
   }
 
   /**
@@ -149,7 +141,6 @@ export class Enemy {
   cancelTransit() {
     this._isMoving = false;
     this._transitTargetRoom = null;
-    this._transitTargetPathIndex = -1;
     this._transitDuration = 0;
     this._transitTimer = 0;
   }
@@ -171,7 +162,8 @@ export class Enemy {
     if (Math.random() < chance && this._returnCooldown <= 0) {
       this._state = ENEMY_STATES.RETURNING;
       this._returnCooldown = config.returnCooldownMs;
-      // Transit is started by EnemyAI._updateReturning — don't start here
+      this._targetDoor = null;
+      this.resetExposures();
       return true;
     }
     return false;
@@ -211,11 +203,11 @@ export class Enemy {
   }
 
   /**
-   * Check if at door room.
+   * Check if enemy is at a door room (dock or generator).
    * @returns {boolean}
    */
   isAtDoor() {
-    return this._currentRoom === this._doorRoom;
+    return this._possibleDoors.includes(this._currentRoom);
   }
 
   /**
@@ -241,9 +233,68 @@ export class Enemy {
     this._isDefeated = true;
   }
 
-  /**
-   * @returns {string}
-   */
+  /** Choose a random door to target from possibleDoors. */
+  chooseTargetDoor() {
+    const doors = this._possibleDoors;
+    this._targetDoor = doors[Math.floor(Math.random() * doors.length)];
+    return this._targetDoor;
+  }
+
+  /** Tick light exposure. Call each frame while at door. */
+  tickLightExposure(dt, isLit) {
+    if (isLit) {
+      this._lightExposureTimer += dt;
+    } else {
+      this._lightExposureTimer = Math.max(0, this._lightExposureTimer - dt * 0.5);
+    }
+  }
+
+  /** Tick door exposure. Call each frame while at door. */
+  tickDoorExposure(dt, isBlocked) {
+    if (isBlocked) {
+      this._doorExposureTimer += dt;
+    } else {
+      this._doorExposureTimer = Math.max(0, this._doorExposureTimer - dt * 0.5);
+    }
+  }
+
+  /** Tick mask exposure. Call each frame while at door. */
+  tickMaskExposure(dt, isActive) {
+    if (isActive) {
+      this._maskExposureTimer += dt;
+    } else {
+      this._maskExposureTimer = Math.max(0, this._maskExposureTimer - dt * 0.5);
+    }
+  }
+
+  /** Reset all exposure timers (called when enemy leaves door or resets). */
+  resetExposures() {
+    this._lightExposureTimer = 0;
+    this._doorExposureTimer = 0;
+    this._maskExposureTimer = 0;
+  }
+
+  /** Randomize camera X position (0-1 relative) for when enemy appears on camera. */
+  randomizeCameraX() {
+    this._cameraX = 0.15 + Math.random() * 0.7;
+  }
+
+  /** @returns {number} Light exposure in ms */
+  get lightExposure() { return this._lightExposureTimer; }
+
+  /** @returns {number} Door exposure in ms */
+  get doorExposure() { return this._doorExposureTimer; }
+
+  /** @returns {number} Mask exposure in ms */
+  get maskExposure() { return this._maskExposureTimer; }
+
+  /** @returns {number} Camera X position 0-1, randomized per room entry */
+  get cameraX() { return this._cameraX ?? 0.5; }
+
+  /** @returns {string|null} Current targeted door room ID. */
+  get targetDoor() { return this._targetDoor; }
+
+  /** @returns {string} */
   get id() { return this._id; }
 
   /** @returns {string} */
@@ -252,7 +303,7 @@ export class Enemy {
   /** @returns {string} */
   get color() { return this._color; }
 
-  /** @returns {string} */
+  /** @returns {Object} */
   get sprites() { return this._sprites; }
 
   /** @returns {string} */
@@ -261,10 +312,7 @@ export class Enemy {
   /** @returns {string|null} */
   get previousRoom() { return this._previousRoom; }
 
-  /** @returns {string} */
-  get doorRoom() { return this._doorRoom; }
-
-  /** @returns {'left'|'right'} */
+  /** @returns {'left'|'right'} Which door side this enemy attacks */
   get doorSide() { return this._doorSide; }
 
   /** @returns {{x:number, y:number}} */
@@ -282,12 +330,6 @@ export class Enemy {
   /** @returns {number} */
   get moveTimer() { return this._moveTimer; }
 
-  /** @returns {number} */
-  get pathIndex() { return this._pathIndex; }
-
-  /** @returns {number} */
-  get pathLength() { return this._path.length; }
-
   /** @returns {boolean} */
   get isDefeated() { return this._isDefeated; }
 
@@ -299,6 +341,9 @@ export class Enemy {
     if (!this._isMoving || this._transitDuration <= 0) return 0;
     return Math.min(1, this._transitTimer / this._transitDuration);
   }
+
+  /** @returns {Set<string>} Rooms visited this night */
+  get visitedRooms() { return this._visitedRooms; }
 
   /**
    * Render enemy placeholder.

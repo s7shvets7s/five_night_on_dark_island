@@ -1,8 +1,9 @@
 /**
- * EnemyAI — FNAF-style AI with state machine.
- * Handles patrol, approach, return, attack logic.
+ * EnemyAI — FNAF-style AI with graph-based wandering.
+ * Enemies choose random rooms via connections, can attack any door.
  */
 import { ENEMY_STATES, ENEMY_CONFIG, MASK_REACTION } from '../config/enemyConfig.js';
+import { ROOM_MAP } from '../data/rooms.js';
 
 export class EnemyAI {
   /**
@@ -60,7 +61,8 @@ export class EnemyAI {
   }
 
   /**
-   * PATROL: Random movement back and forth on path.
+   * PATROL: Random movement through the room graph.
+   * Enemy picks a random connected room and moves there.
    * @param {Enemy} enemy
    * @param {Object} config
    * @param {number} dt
@@ -69,10 +71,9 @@ export class EnemyAI {
   _updatePatrol(enemy, config, dt) {
     enemy.tickMoveTimer(dt);
 
-    // If enemy reached the last room on path (door room), transition to AT_DOOR
-    // This prevents enemy from endlessly patrolling at the door room
-    if (enemy.pathIndex >= enemy.pathLength - 1) {
-      enemy.resetMoveTimer(); // Reset timer so AT_DOOR delay starts fresh
+    // If enemy is at a door room, transition to AT_DOOR to wait and possibly attack
+    if (enemy.isAtDoor()) {
+      enemy.resetMoveTimer();
       enemy.setState(ENEMY_STATES.AT_DOOR);
       return 'moved';
     }
@@ -90,31 +91,31 @@ export class EnemyAI {
 
     if (Math.random() > moveChance) return null;
 
-    const direction = this._chooseDirection(enemy, config);
+    // Choose a random connected room (avoid going back immediately)
+    const currentRoom = enemy.currentRoom;
+    const room = ROOM_MAP[currentRoom];
+    if (!room || !room.connections || room.connections.length === 0) {
+      // No connections — force return to base
+      enemy.setState(ENEMY_STATES.RETURNING);
+      return 'returned';
+    }
 
-    if (direction === 'forward') {
-      const transitTime = config.transitTimeMs * (0.8 + Math.random() * 0.4); // ±20% variance
-      const started = enemy.startTransitForward(transitTime);
-      if (started) {
-        enemy.setState(ENEMY_STATES.IN_TRANSIT);
-        this._emitMove(enemy);
-        return 'moved';
-      }
-    } else {
-      const transitTime = config.transitTimeMs * (0.8 + Math.random() * 0.4);
-      const started = enemy.startTransitBackward(transitTime);
-      if (started) {
-        enemy.setState(ENEMY_STATES.IN_TRANSIT);
-        this._emitMove(enemy);
-        return 'returned';
-      }
+    const connections = room.connections;
+    let targetRoom = this._chooseNextRoom(connections, currentRoom, enemy.previousRoom);
+
+    const transitTime = config.transitTimeMs * (0.8 + Math.random() * 0.4);
+    if (enemy.startTransitTo(targetRoom, transitTime)) {
+      enemy.setState(ENEMY_STATES.IN_TRANSIT);
+      this._emitMove(enemy);
+      return 'moved';
     }
 
     return null;
   }
 
   /**
-   * APPROACH: Aggressive forward movement.
+   * APPROACH: Aggressive movement toward a chosen door.
+   * Enemy picks a door target and tries to move toward it.
    * @param {Enemy} enemy
    * @param {Object} config
    * @param {number} dt
@@ -122,6 +123,12 @@ export class EnemyAI {
    */
   _updateApproach(enemy, config, dt) {
     enemy.tickMoveTimer(dt);
+
+    // If already at the target door, switch to AT_DOOR
+    if (enemy.currentRoom === enemy.targetDoor && enemy.isAtDoor()) {
+      enemy.setState(ENEMY_STATES.AT_DOOR);
+      return 'moved';
+    }
 
     const baseInterval = config.moveIntervalMs;
     const variance = config.moveVariance;
@@ -135,12 +142,23 @@ export class EnemyAI {
     const moveChance = 0.5 + aggressionFactor * 0.5;
 
     if (Math.random() > moveChance) {
+      // Lost interest — go back to patrolling
+      enemy.setState(ENEMY_STATES.PATROL);
+      return null;
+    }
+
+    // Find the best next room toward the target door (BFS shortest path step)
+    const targetDoor = enemy.targetDoor || enemy.chooseTargetDoor();
+    const nextRoom = this._findPathStep(enemy.currentRoom, targetDoor);
+
+    if (!nextRoom) {
+      // No path found — wander randomly
       enemy.setState(ENEMY_STATES.PATROL);
       return null;
     }
 
     const transitTime = config.transitTimeMs * (0.8 + Math.random() * 0.4);
-    if (enemy.startTransitForward(transitTime)) {
+    if (enemy.startTransitTo(nextRoom, transitTime)) {
       enemy.setState(ENEMY_STATES.IN_TRANSIT);
       this._emitMove(enemy);
       return 'moved';
@@ -152,8 +170,8 @@ export class EnemyAI {
 
   /**
    * AT_DOOR: Enemy at door, may attack.
-   * FNAF-style: enemy waits minimum time before checking attack,
-   * reacts to light/door/mask in priority order.
+   * Light/door/mask checks work IMMEDIATELY with accumulated exposure.
+   * Attack check is delayed — gives player time to react.
    * @param {Enemy} enemy
    * @param {Object} config
    * @param {Object} officeSystem
@@ -163,81 +181,88 @@ export class EnemyAI {
   _updateAtDoor(enemy, config, dt, officeSystem, maskActive) {
     enemy.tickMoveTimer(dt);
 
-    // 1. Enemy must stay at door for minimum time before any check
-    // This prevents instant attacks — gives player time to react
-    const minDoorTime = config.moveIntervalMs + config.moveVariance * 0.5;
-    if (enemy.moveTimer < minDoorTime) return null;
+    // ==================== IMMEDIATE CHECKS ====================
+    // These work from the moment enemy arrives at door — player can react immediately
 
-    enemy.resetMoveTimer();
-
-    // 2. LIGHT check first (if enemy fears light)
-    // Player can actively repel enemy by turning on light
+    // 1. LIGHT check — accumulates exposure over time
     if (config.canReturnOnLight) {
       const lightOn = enemy.doorSide === 'left'
         ? officeSystem.leftLightOn
         : officeSystem.rightLightOn;
 
-      if (lightOn && Math.random() < config.returnChance) {
+      enemy.tickLightExposure(dt, lightOn);
+
+      if (enemy.lightExposure >= config.lightExposureNeeded && Math.random() < config.returnChance) {
         enemy.tryReturn(true);
         this._emitReturn(enemy);
         return 'returned';
       }
     }
 
-    // 3. DOOR check (if enemy retreats from closed doors)
+    // 2. DOOR check — accumulates exposure over time
     if (config.canReturnOnDoor) {
       const doorClosed = enemy.doorSide === 'left'
         ? !officeSystem.leftDoorOpen
         : !officeSystem.rightDoorOpen;
 
-      if (doorClosed && Math.random() < config.returnChance) {
+      enemy.tickDoorExposure(dt, doorClosed);
+
+      if (enemy.doorExposure >= config.doorExposureNeeded && Math.random() < config.returnChance) {
         enemy.tryReturn(true);
         this._emitReturn(enemy);
         return 'blocked';
       }
     }
 
-    // 4. MASK reaction — 4 types of behavior per enemy
+    // 3. MASK reaction — accumulates exposure over time
     if (maskActive) {
       const reaction = config.maskReaction;
 
       if (reaction === MASK_REACTION.FEAR) {
-        // Enemy fears mask — runs away immediately
-        enemy.tryReturn(true);
-        this._emitReturn(enemy);
-        return 'blocked';
+        enemy.tickMaskExposure(dt, true);
+        if (enemy.maskExposure >= config.maskExposureNeeded) {
+          enemy.tryReturn(true);
+          this._emitReturn(enemy);
+          return 'blocked';
+        }
       }
 
       if (reaction === MASK_REACTION.STAND) {
         // Enemy stands still — doesn't attack, doesn't leave
-        // Player must wait out mask cooldown
         return null;
       }
 
       if (reaction === MASK_REACTION.ATTACK_ON_MASK) {
-        // Enemy becomes MORE aggressive when seeing mask
-        // High attack chance — mask is DANGEROUS for this enemy
-        const attackOnMaskChance = 0.7 + (config.aggression / 20) * 0.3;
-        if (Math.random() < attackOnMaskChance) {
-          enemy.setState(ENEMY_STATES.ATTACK);
-          return 'attacked';
+        enemy.tickMaskExposure(dt, true);
+        if (enemy.maskExposure >= config.maskExposureNeeded) {
+          const attackOnMaskChance = 0.7 + (config.aggression / 20) * 0.3;
+          if (Math.random() < attackOnMaskChance) {
+            enemy.setState(ENEMY_STATES.ATTACK);
+            return 'attacked';
+          }
         }
-        // If not attacked this tick, will check again next cycle
         return null;
       }
 
       // IGNORE → mask doesn't affect this enemy, continue to attack check
     }
 
-    // 5. Normal attack check (checked once per minDoorTime cycle)
+    // ==================== DELAYED CHECKS ====================
+    // Attack and voluntary leave — only after minimum door time
+
+    const minDoorTime = config.moveIntervalMs + config.moveVariance * 0.5;
+    if (enemy.moveTimer < minDoorTime) return null;
+
+    enemy.resetMoveTimer();
+
+    // 4. Normal attack check (checked once per minDoorTime cycle)
     const attackChance = 0.3 + (config.aggression / 20) * 0.3;
     if (Math.random() < attackChance) {
       enemy.setState(ENEMY_STATES.ATTACK);
       return 'attacked';
     }
 
-    // 6. Periodic voluntary leave (even with open door)
-    // Creates natural pacing — enemies don't camp forever
+    // 5. Periodic voluntary leave (even with open door)
     if (Math.random() < config.returnChance * 0.3) {
       enemy.tryReturn(false);
       this._emitReturn(enemy);
@@ -260,26 +285,26 @@ export class EnemyAI {
 
     if (!completed) return null;
 
-    // Transit completed — enemy arrives at new room
-    const totalPath = enemy.pathLength;
-    const newIndex = enemy.pathIndex;
+    // Transit completed — reset exposure timers and randomize camera position
+    enemy.resetExposures();
+    enemy.randomizeCameraX();
 
     if (enemy.state === ENEMY_STATES.RETURNING) {
-      // Was returninging — check if reached base
       if (enemy.isAtBase()) {
         enemy.setState(ENEMY_STATES.PATROL);
       }
       return 'returned';
     }
 
-    // Check if approaching door
-    if (newIndex >= totalPath - 1) {
+    // Check if approaching a door room
+    if (enemy.isAtDoor()) {
       enemy.setState(ENEMY_STATES.AT_DOOR);
       return 'moved';
     }
 
     // Continue patrolling or switch to approach
-    if (newIndex >= 2 && Math.random() < 0.3) {
+    if (Math.random() < 0.3) {
+      enemy.chooseTargetDoor();
       enemy.setState(ENEMY_STATES.APPROACH);
     } else {
       enemy.setState(ENEMY_STATES.PATROL);
@@ -290,8 +315,8 @@ export class EnemyAI {
   }
 
   /**
-   * RETURNING: Moving backward to base.
-   * Waits for current transit to finish, then steps back one room at a time.
+   * RETURNING: Moving backward to base room.
+   * Uses BFS to find path back, moves one step at a time.
    * @param {Enemy} enemy
    * @param {Object} config
    * @param {number} dt
@@ -305,55 +330,97 @@ export class EnemyAI {
 
       // Transit completed — check if reached base
       if (enemy.isAtBase()) {
+        enemy.resetExposures();
         enemy.setState(ENEMY_STATES.PATROL);
         enemy.resetMoveTimer();
         return 'returned';
       }
 
-      // Not at base yet — continue returning next cycle
       return 'returned';
     }
 
     // Transit completed — check if reached base
     if (enemy.isAtBase()) {
+      enemy.resetExposures();
       enemy.setState(ENEMY_STATES.PATROL);
       enemy.resetMoveTimer();
       return null;
     }
 
-    // Continue returning — start next step back
-    if (enemy.pathIndex > 0) {
+    // Continue returning — find next step toward base
+    const nextRoom = this._findPathStep(enemy.currentRoom, enemy.baseRoom || ENEMY_CONFIG[enemy.id].baseRoom);
+
+    if (nextRoom) {
       const transitTime = config.transitTimeMs * 0.6; // Faster return
-      enemy.startTransitBackward(transitTime);
+      enemy.startTransitTo(nextRoom, transitTime);
       this._emitReturn(enemy);
       return 'returned';
     }
 
-    // Already at start of path but not at base — fallback
+    // No path found — fallback to patrol
     enemy.setState(ENEMY_STATES.PATROL);
     return null;
   }
 
   /**
-   * Choose movement direction for patrol.
-   * Biased toward forward (70%) to create pressure on the player.
-   * @param {Enemy} enemy
-   * @param {Object} config
-   * @returns {'forward'|'backward'}
+   * Choose next room for patrol.
+   * Prefers rooms not recently visited, avoids going back immediately.
+   * @param {string[]} connections - Room connection IDs
+   * @param {string} currentRoom - Current room ID
+   * @param {string|null} previousRoom - Previous room ID
+   * @returns {string}
    */
-  _chooseDirection(enemy, config) {
-    const index = enemy.pathIndex;
-    const totalPath = enemy.pathLength;
-
-    if (index <= 0) {
-      return 'forward';
-    }
-    if (index >= totalPath - 1) {
-      return 'backward';
+  _chooseNextRoom(connections, currentRoom, previousRoom) {
+    // Filter out previous room to avoid immediate backtracking (unless it's the only option)
+    let options = connections.filter(r => r !== previousRoom);
+    if (options.length === 0) {
+      options = connections;
     }
 
-    // 70% forward, 30% backward — creates steady pressure
-    return Math.random() < 0.7 ? 'forward' : 'backward';
+    // Weight door rooms slightly less (don't rush to doors every time)
+    const doorRooms = ['dock', 'generator'];
+    const nonDoorOptions = options.filter(r => !doorRooms.includes(r));
+
+    // 70% chance to pick non-door room (wandering), 30% door room (pressure)
+    if (nonDoorOptions.length > 0 && Math.random() < 0.7) {
+      return nonDoorOptions[Math.floor(Math.random() * nonDoorOptions.length)];
+    }
+
+    return options[Math.floor(Math.random() * options.length)];
+  }
+
+  /**
+   * Find one step of the shortest path from current to target (BFS).
+   * @param {string} fromRoom - Starting room ID
+   * @param {string} toRoom - Target room ID
+   * @returns {string|null} Next room ID, or null if no path
+   */
+  _findPathStep(fromRoom, toRoom) {
+    if (fromRoom === toRoom) return toRoom;
+
+    const visited = new Set();
+    const queue = [{ roomId: fromRoom, path: [] }];
+    visited.add(fromRoom);
+
+    while (queue.length > 0) {
+      const { roomId, path } = queue.shift();
+      const room = ROOM_MAP[roomId];
+      if (!room || !room.connections) continue;
+
+      for (const next of room.connections) {
+        if (visited.has(next)) continue;
+        visited.add(next);
+
+        const newPath = [...path, next];
+        if (next === toRoom) {
+          return newPath[0]; // First step toward target
+        }
+
+        queue.push({ roomId: next, path: newPath });
+      }
+    }
+
+    return null; // No path found
   }
 
   /**

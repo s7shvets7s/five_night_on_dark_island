@@ -2,6 +2,7 @@
  * HUDSystem — renders the game HUD overlay.
  */
 import { COLORS, UI } from '../config/gameConfig.js';
+import { ENEMY_STATES } from '../config/enemyConfig.js';
 import { i18n } from '../i18n/index.js';
 
 export class HUDSystem {
@@ -203,7 +204,9 @@ export class HUDSystem {
       const cx = toMapX(room.x);
       const cy = toMapY(room.y);
       const isSelected = room.id === selectedCamera;
-      const hasEnemy = enemies?.some(e => e.currentRoom === room.id && !e.isDefeated && !e.isInTransit);
+      const hasEnemy = enemies?.some(e =>
+        e.currentRoom === room.id && !e.isDefeated && !e.isInTransit && e.state !== ENEMY_STATES.AT_DOOR
+      );
       const isGlitched = this._glitchedCamera && room.id === this._glitchedCamera;
 
       const nodeR = 12;
@@ -505,6 +508,9 @@ export class HUDSystem {
     const toMapX = (rx) => mapX + UI.PADDING + rx * (mapW - UI.PADDING * 2);
     const toMapY = (ry) => mapY + UI.PADDING + ry * (mapH - UI.PADDING * 2 - 24);
 
+    const nodeR = 12;
+    const hitExtra = 6; // extra touch area for easier clicking
+
     const nodes = [];
     for (const room of Object.values(rooms)) {
       if (room.isOffice) continue;
@@ -512,7 +518,7 @@ export class HUDSystem {
         id: room.id,
         x: toMapX(room.x),
         y: toMapY(room.y),
-        r: 18,
+        r: nodeR + hitExtra,
       });
     }
     return nodes;

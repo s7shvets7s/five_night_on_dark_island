@@ -781,9 +781,10 @@ export class NightScene {
       this._adShowing = true;
       enemy.setState(ENEMY_STATES.PATROL);
       enemy.setAggression(Math.max(0, enemy.aggression - 5));
-      // Move enemy back one room so it doesn't instantly attack again
-      if (enemy.pathIndex > 0) {
-        enemy.startTransitBackward(2000);
+      // Move enemy back to previous room so it doesn't instantly attack again
+      const prevRoom = enemy.previousRoom;
+      if (prevRoom) {
+        enemy.startTransitTo(prevRoom, 2000);
       }
       try {
         await this._ads?.showInterstitial();

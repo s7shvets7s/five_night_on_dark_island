@@ -21,12 +21,15 @@ export const ROOMS = [
   { id: 'helipad', name: 'Helipad', connections: ['golden_temple'], x: 0.5, y: 0.05, isOffice: false, isBlindSpot: false, enemyY: 0.5, enemyScale: 1.0 },
   { id: 'golden_temple', name: 'Golden Temple', connections: ['helipad', 'staff_quarters', 'greenhouse'], x: 0.5, y: 0.18, isOffice: false, isBlindSpot: false, enemyY: 0.65, enemyScale: 3.7 },
   { id: 'staff_quarters', name: 'Staff Quarters', connections: ['golden_temple', 'guest_house', 'central_street'], x: 0.2, y: 0.32, isOffice: false, isBlindSpot: false, enemyY: 0.65, enemyScale: 3.7},
-  { id: 'greenhouse', name: 'Greenhouse', connections: ['golden_temple', 'beach_house', 'central_street'], x: 0.8, y: 0.32, isOffice: false, isBlindSpot: false, enemyY: 0.5, enemyScale: 1.2 },
-  { id: 'guest_house', name: 'Guest House', connections: ['staff_quarters', 'dock', 'central_street'], x: 0.2, y: 0.52, isOffice: false, isBlindSpot: false, enemyY: 0.5, enemyScale: 0.8 },
-  { id: 'beach_house', name: 'Beach House', connections: ['greenhouse', 'generator'], x: 0.8, y: 0.52, isOffice: false, isBlindSpot: false, enemyY: 0.5, enemyScale: 0.8 },
-  { id: 'dock', name: 'Main Dock', connections: ['guest_house', 'office'], x: 0.2, y: 0.72, isOffice: false, isBlindSpot: true, enemyY: 0.5, enemyScale: 0.6 },
-  { id: 'generator', name: 'Generator', connections: ['beach_house', 'office'], x: 0.8, y: 0.72, isOffice: false, isBlindSpot: true, enemyY: 0.5, enemyScale: 0.6 },
-  { id: 'central_street', name: 'Central Street', connections: ['staff_quarters', 'guest_house', 'greenhouse'], x: 0.5, y: 0.58, isOffice: false, isBlindSpot: false, enemyY: 0.5, enemyScale: 1.0 },
+  { id: 'greenhouse', name: 'Greenhouse', connections: ['golden_temple', 'beach_house', 'central_street', 'pool'], x: 0.8, y: 0.32, isOffice: false, isBlindSpot: false, enemyY: 0.6, enemyScale: 1.2 },
+  { id: 'guest_house', name: 'Guest House', connections: ['staff_quarters', 'dock', 'central_street'], x: 0.2, y: 0.52, isOffice: false, isBlindSpot: false, enemyY: 0.65, enemyScale: 3.8 },
+  { id: 'beach_house', name: 'Beach House', connections: ['greenhouse', 'generator'], x: 0.8, y: 0.52, isOffice: false, isBlindSpot: false, enemyY: 0.66, enemyScale: 3.6 },
+  { id: 'dock', name: 'Main Dock', connections: ['guest_house', 'office', 'tunnel'], x: 0.2, y: 0.72, isOffice: false, isBlindSpot: true, enemyY: 0.66, enemyScale: 0.6 },
+  { id: 'generator', name: 'Generator', connections: ['beach_house', 'office', 'pool', 'bunker'], x: 0.8, y: 0.72, isOffice: false, isBlindSpot: true, enemyY: 0.6, enemyScale: 3.6 },
+  { id: 'central_street', name: 'Central Street', connections: ['staff_quarters', 'guest_house', 'greenhouse', 'bunker'], x: 0.5, y: 0.58, isOffice: false, isBlindSpot: false, enemyY: 0.55, enemyScale: 2.5 },
+  { id: 'pool', name: 'Pool', connections: ['greenhouse', 'generator'], x: 0.95, y: 0.52, isOffice: false, isBlindSpot: false, enemyY: 0.4, enemyScale: 0.8 },
+  { id: 'tunnel', name: 'Tunnel', connections: ['dock', 'bunker'], x: 0.2, y: 0.95, isOffice: false, isBlindSpot: true, enemyY: 0.65, enemyScale: 3.6 },
+  { id: 'bunker', name: 'Bunker', connections: ['tunnel', 'generator', 'central_street'], x: 0.8, y: 0.95, isOffice: false, isBlindSpot: true, enemyY: 0.65, enemyScale: 3.6 },
 ];
 
 /** @type {Record<string, Room>} - Quick lookup by ID */

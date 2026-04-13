@@ -219,9 +219,7 @@ export class CameraSystem {
   }
 
   _drawEnemyIndicator(ctx, w, h, enemy, room) {
-    const seed = (enemy.id.charCodeAt(0) * 7 + (enemy.id.charCodeAt(1) || 0) * 13) % 100;
-    const baseX = 0.2 + (seed / 100) * 0.6;
-    const x = baseX * w;
+    const x = (enemy.cameraX ?? 0.5) * w;
 
     const enemyY = room?.enemyY ?? 0.5;
     const y = enemyY * h;
