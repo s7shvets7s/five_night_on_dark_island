@@ -203,7 +203,7 @@ export class HUDSystem {
       const cx = toMapX(room.x);
       const cy = toMapY(room.y);
       const isSelected = room.id === selectedCamera;
-      const hasEnemy = enemies?.some(e => e.currentRoom === room.id && !e.isDefeated);
+      const hasEnemy = enemies?.some(e => e.currentRoom === room.id && !e.isDefeated && !e.isInTransit);
       const isGlitched = this._glitchedCamera && room.id === this._glitchedCamera;
 
       const nodeR = 12;

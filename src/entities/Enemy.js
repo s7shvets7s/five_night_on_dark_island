@@ -38,6 +38,12 @@ export class Enemy {
     this._returnCooldown = 0;
 
     this._isDefeated = false;
+
+    // Transit state — enemy is "in the corridor" between rooms
+    this._transitTargetRoom = null;
+    this._transitTargetPathIndex = -1;
+    this._transitDuration = 0;
+    this._transitTimer = 0;
   }
 
   /**
@@ -53,6 +59,11 @@ export class Enemy {
     this._isMoving = false;
     this._returnCooldown = 0;
     this._isDefeated = false;
+
+    this._transitTargetRoom = null;
+    this._transitTargetPathIndex = -1;
+    this._transitDuration = 0;
+    this._transitTimer = 0;
   }
 
   /**
@@ -64,41 +75,83 @@ export class Enemy {
   }
 
   /**
-   * Move forward on path (approaching).
+   * Start transit forward on path (approaching).
+   * Enemy becomes IN_TRANSIT and is invisible during the transition.
+   * @param {number} transitDurationMs - Duration of transit in ms
+   * @returns {boolean} Whether transit was started
    */
-  moveForward() {
+  startTransitForward(transitDurationMs) {
     if (this._pathIndex >= this._path.length - 1) {
       return false;
     }
     this._previousRoom = this._currentRoom;
-    this._pathIndex++;
-    this._currentRoom = this._path[this._pathIndex];
+    this._transitTargetPathIndex = this._pathIndex + 1;
+    this._transitTargetRoom = this._path[this._transitTargetPathIndex];
+    this._transitDuration = transitDurationMs;
+    this._transitTimer = 0;
     this._isMoving = true;
-    this._moveTimer = 0;
     return true;
   }
 
   /**
-   * Move backward on path (returning to base).
+   * Start transit backward on path (returning to base).
+   * @param {number} transitDurationMs - Duration of transit in ms
+   * @returns {boolean} Whether transit was started
    */
-  moveBackward() {
+  startTransitBackward(transitDurationMs) {
     if (this._pathIndex <= 0) {
-      this._state = ENEMY_STATES.PATROL;
       return false;
     }
     this._previousRoom = this._currentRoom;
-    this._pathIndex--;
-    this._currentRoom = this._path[this._pathIndex];
+    this._transitTargetPathIndex = this._pathIndex - 1;
+    this._transitTargetRoom = this._path[this._transitTargetPathIndex];
+    this._transitDuration = transitDurationMs;
+    this._transitTimer = 0;
     this._isMoving = true;
-    this._moveTimer = 0;
     return true;
   }
 
   /**
-   * Complete movement transition.
+   * Update transit timer. Call each frame while IN_TRANSIT.
+   * @param {number} dt - Delta time in ms
+   * @returns {boolean} True if transit completed
    */
-  completeMove() {
+  updateTransit(dt) {
+    if (!this._isMoving || this._transitDuration <= 0) return false;
+
+    this._transitTimer += dt;
+    if (this._transitTimer >= this._transitDuration) {
+      this._completeTransit();
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Complete the transit — move enemy to target room.
+   * @returns {number} New path index
+   */
+  _completeTransit() {
+    this._pathIndex = this._transitTargetPathIndex;
+    this._currentRoom = this._transitTargetRoom;
     this._isMoving = false;
+    this._transitTargetRoom = null;
+    this._transitTargetPathIndex = -1;
+    this._transitDuration = 0;
+    this._transitTimer = 0;
+    this._moveTimer = 0;
+    return this._pathIndex;
+  }
+
+  /**
+   * Cancel transit (e.g. enemy forced to return).
+   */
+  cancelTransit() {
+    this._isMoving = false;
+    this._transitTargetRoom = null;
+    this._transitTargetPathIndex = -1;
+    this._transitDuration = 0;
+    this._transitTimer = 0;
   }
 
   /**
@@ -237,6 +290,15 @@ export class Enemy {
 
   /** @returns {boolean} */
   get isDefeated() { return this._isDefeated; }
+
+  /** @returns {boolean} — True if enemy is currently in transit between rooms */
+  get isInTransit() { return this._isMoving && this._state === ENEMY_STATES.IN_TRANSIT; }
+
+  /** @returns {number} — Transit progress 0-1 */
+  get transitProgress() {
+    if (!this._isMoving || this._transitDuration <= 0) return 0;
+    return Math.min(1, this._transitTimer / this._transitDuration);
+  }
 
   /**
    * Render enemy placeholder.

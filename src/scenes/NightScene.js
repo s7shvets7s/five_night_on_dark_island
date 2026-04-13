@@ -263,6 +263,14 @@ export class NightScene {
         const startHour = this._enemyStartHours.get(enemy.id) ?? 0;
         if (currentHour < startHour) continue;
 
+        // Progressive aggression: +1 aggression per hour active, max +5
+        const hoursActive = currentHour - startHour;
+        const spawnConfig = this._nightConfig.spawns.find(s => s.enemyId === enemy.id);
+        if (spawnConfig) {
+          const bonusAggression = hoursActive > 0 ? Math.min(5, hoursActive) : 0;
+          enemy.setAggression(spawnConfig.aggression + bonusAggression);
+        }
+
         const result = this._enemyAI.update(enemy, dtMs, this._officeSystem, this._maskActive);
         if (result === 'attacked') {
           enemy.defeat();
@@ -404,7 +412,7 @@ export class NightScene {
     const rightDoorRoom = 'generator';
 
     for (const enemy of this._enemies) {
-      if (enemy.isDefeated) continue;
+      if (enemy.isDefeated || enemy.isInTransit) continue;
 
       if (enemy.currentRoom === leftDoorRoom && !leftClosed) {
         const lightOn = this._officeSystem.leftLightOn;

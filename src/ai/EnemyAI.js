@@ -27,8 +27,9 @@ export class EnemyAI {
     const config = ENEMY_CONFIG[enemy.id];
     enemy.updateCooldown(dt);
 
-    if (enemy.isMoving && enemy.moveTimer > 500) {
-      enemy.completeMove();
+    // Handle IN_TRANSIT state first — enemy is invisible during transit
+    if (enemy.state === ENEMY_STATES.IN_TRANSIT) {
+      return this._updateInTransit(enemy, config, dt);
     }
 
     if (enemy.isMoving) return null;
@@ -79,23 +80,18 @@ export class EnemyAI {
     const direction = this._chooseDirection(enemy, config);
 
     if (direction === 'forward') {
-      const moved = enemy.moveForward();
-      if (moved) {
-        const newIndex = enemy.pathIndex;
-        const totalPath = enemy.pathLength;
-
-        if (newIndex >= totalPath - 2) {
-          enemy.setState(ENEMY_STATES.AT_DOOR);
-        } else if (newIndex >= 2 && Math.random() < 0.3) {
-          enemy.setState(ENEMY_STATES.APPROACH);
-        }
-
+      const transitTime = config.transitTimeMs * (0.8 + Math.random() * 0.4); // ±20% variance
+      const started = enemy.startTransitForward(transitTime);
+      if (started) {
+        enemy.setState(ENEMY_STATES.IN_TRANSIT);
         this._emitMove(enemy);
         return 'moved';
       }
     } else {
-      const moved = enemy.moveBackward();
-      if (moved) {
+      const transitTime = config.transitTimeMs * (0.8 + Math.random() * 0.4);
+      const started = enemy.startTransitBackward(transitTime);
+      if (started) {
+        enemy.setState(ENEMY_STATES.IN_TRANSIT);
         this._emitMove(enemy);
         return 'returned';
       }
@@ -130,14 +126,9 @@ export class EnemyAI {
       return null;
     }
 
-    if (enemy.moveForward()) {
-      const newIndex = enemy.pathIndex;
-      const totalPath = enemy.pathLength;
-
-      if (newIndex >= totalPath - 2) {
-        enemy.setState(ENEMY_STATES.AT_DOOR);
-      }
-
+    const transitTime = config.transitTimeMs * (0.8 + Math.random() * 0.4);
+    if (enemy.startTransitForward(transitTime)) {
+      enemy.setState(ENEMY_STATES.IN_TRANSIT);
       this._emitMove(enemy);
       return 'moved';
     }
@@ -191,6 +182,47 @@ export class EnemyAI {
   }
 
   /**
+   * IN_TRANSIT: Enemy is moving between rooms — invisible to cameras.
+   * @param {Enemy} enemy
+   * @param {Object} config
+   * @param {number} dt
+   * @returns {string|null}
+   */
+  _updateInTransit(enemy, config, dt) {
+    const completed = enemy.updateTransit(dt);
+
+    if (!completed) return null;
+
+    // Transit completed — enemy arrives at new room
+    const totalPath = enemy.pathLength;
+    const newIndex = enemy.pathIndex;
+
+    if (enemy.state === ENEMY_STATES.RETURNING) {
+      // Was returninging — check if reached base
+      if (enemy.isAtBase()) {
+        enemy.setState(ENEMY_STATES.PATROL);
+      }
+      return 'returned';
+    }
+
+    // Check if approaching door
+    if (newIndex >= totalPath - 1) {
+      enemy.setState(ENEMY_STATES.AT_DOOR);
+      return 'moved';
+    }
+
+    // Continue patrolling or switch to approach
+    if (newIndex >= 2 && Math.random() < 0.3) {
+      enemy.setState(ENEMY_STATES.APPROACH);
+    } else {
+      enemy.setState(ENEMY_STATES.PATROL);
+    }
+
+    this._emitArrive(enemy);
+    return 'moved';
+  }
+
+  /**
    * RETURNING: Moving backward to base.
    * @param {Enemy} enemy
    * @param {Object} config
@@ -198,32 +230,29 @@ export class EnemyAI {
    * @returns {string|null}
    */
   _updateReturning(enemy, config, dt) {
-    enemy.tickMoveTimer(dt);
+    // If not yet in transit, start it
+    if (enemy.state === ENEMY_STATES.RETURNING && !enemy.isInTransit) {
+      const returnSpeed = config.transitTimeMs * 0.6; // Faster return
+      const variance = config.transitTimeMs * 0.1;
+      const transitTime = returnSpeed + Math.random() * variance;
 
-    const returnSpeed = config.moveIntervalMs * 0.5;
-    const variance = config.moveVariance * 0.3;
-    const interval = returnSpeed + Math.random() * variance;
-
-    if (enemy.moveTimer < interval) return null;
-
-    enemy.resetMoveTimer();
-
-    if (enemy.moveBackward()) {
-      this._emitMove(enemy);
-
-      if (enemy.isAtBase()) {
+      if (enemy.pathIndex > 0) {
+        enemy.startTransitBackward(transitTime);
+        this._emitReturn(enemy);
+        return 'returned';
+      } else {
         enemy.setState(ENEMY_STATES.PATROL);
+        return null;
       }
-
-      return 'returned';
     }
 
-    enemy.setState(ENEMY_STATES.PATROL);
+    // If already in transit, the IN_TRANSIT handler will process it
     return null;
   }
 
   /**
    * Choose movement direction for patrol.
+   * Biased toward forward (70%) to create pressure on the player.
    * @param {Enemy} enemy
    * @param {Object} config
    * @returns {'forward'|'backward'}
@@ -239,7 +268,8 @@ export class EnemyAI {
       return 'backward';
     }
 
-    return Math.random() < 0.5 ? 'forward' : 'backward';
+    // 70% forward, 30% backward — creates steady pressure
+    return Math.random() < 0.7 ? 'forward' : 'backward';
   }
 
   /**
@@ -298,6 +328,18 @@ export class EnemyAI {
     this._eventBus.emit('enemy:return', {
       enemyId: enemy.id,
       from: enemy.currentRoom,
+    });
+  }
+
+  /**
+   * Emit arrive event (transit completed).
+   * @param {Enemy} enemy
+   */
+  _emitArrive(enemy) {
+    this._eventBus.emit('enemy:arrive', {
+      enemyId: enemy.id,
+      room: enemy.currentRoom,
+      state: enemy.state,
     });
   }
 }

@@ -104,7 +104,7 @@ export class CameraSystem {
       // Draw enemies BEFORE noise so they appear behind static
       if (enemies) {
         for (const enemy of enemies) {
-          if (enemy.currentRoom === cameraId) {
+          if (enemy.currentRoom === cameraId && !enemy.isInTransit) {
             this._drawEnemyIndicator(ctx, w, h, enemy, room);
           }
         }
