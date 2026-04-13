@@ -100,8 +100,18 @@ export class CameraSystem {
 
     if (cameraImage && cameraImage.complete && cameraImage.naturalWidth > 0) {
       ctx.drawImage(cameraImage, camX, camY, camW, camH);
-      
-      this._drawCameraNoise(ctx, camX, camY, camW, camH);
+
+      // Draw enemies BEFORE noise so they appear behind static
+      if (enemies) {
+        for (const enemy of enemies) {
+          if (enemy.currentRoom === cameraId) {
+            this._drawEnemyIndicator(ctx, w, h, enemy, room);
+          }
+        }
+      }
+
+      const enemyCount = enemies ? enemies.filter(e => e.currentRoom === cameraId).length : 0;
+      this._drawCameraNoise(ctx, camX, camY, camW, camH, enemyCount);
     } else if (room) {
       this._drawRoom(ctx, camX, camY, camW, camH, room, rooms);
     }
@@ -112,39 +122,35 @@ export class CameraSystem {
     ctx.textBaseline = 'top';
     ctx.fillText(`CAM: ${room?.name || cameraId}`, 20, 20);
 
-    if (enemies) {
-      for (const enemy of enemies) {
-        if (enemy.currentRoom === cameraId) {
-          this._drawEnemyIndicator(ctx, w, h, enemy, room);
-        }
-      }
-    }
-
-    this._drawStatic(ctx, w, h);
+    const enemyCount = enemies ? enemies.filter(e => e.currentRoom === cameraId).length : 0;
+    this._drawStatic(ctx, w, h, enemyCount);
   }
 
-  _drawCameraNoise(ctx, x, y, w, h) {
+  _drawCameraNoise(ctx, x, y, w, h, enemyCount = 0) {
+    const noiseMultiplier = 1 + (enemyCount || 0) * 0.5;
+
     ctx.save();
     ctx.beginPath();
     ctx.rect(x, y, w, h);
     ctx.clip();
 
-    for (let i = 0; i < 15; i++) {
+    const scanlineCount = Math.floor(15 * noiseMultiplier);
+    for (let i = 0; i < scanlineCount; i++) {
       const ny = y + Math.random() * h;
       const nh = Math.random() * 3 + 1;
-      ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.15})`;
+      ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.15 * noiseMultiplier})`;
       ctx.fillRect(x, ny, w, nh);
     }
 
-    if (Math.random() < 0.08) {
+    if (Math.random() < 0.08 * noiseMultiplier) {
       const glitchY = y + Math.random() * h;
       const glitchH = Math.random() * 20 + 5;
       const offset = (Math.random() - 0.5) * 30;
       ctx.drawImage(ctx.canvas, x, glitchY, w, glitchH, x + offset, glitchY, w, glitchH);
     }
 
-    if (Math.random() < 0.05) {
-      ctx.fillStyle = `rgba(${Math.random() > 0.5 ? '255,0,0' : '0,0,255'}, ${Math.random() * 0.1})`;
+    if (Math.random() < 0.05 * noiseMultiplier) {
+      ctx.fillStyle = `rgba(${Math.random() > 0.5 ? '255,0,0' : '0,0,255'}, ${Math.random() * 0.1 * noiseMultiplier})`;
       ctx.fillRect(x + Math.random() * w * 0.5, y + Math.random() * h * 0.5, w * 0.3, h * 0.2);
     }
 
@@ -178,29 +184,32 @@ export class CameraSystem {
     });
   }
 
-  _drawStatic(ctx, w, h) {
+  _drawStatic(ctx, w, h, enemyCount = 0) {
+    const noiseMultiplier = 1 + (enemyCount || 0) * 0.5;
+
     // Horizontal scan lines for CRT effect
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.03)';
+    const scanLineChance = Math.min(1, 0.5 * noiseMultiplier);
+    ctx.fillStyle = `rgba(255, 255, 255, ${0.03 * noiseMultiplier})`;
     for (let y = 0; y < h; y += 4) {
-      if (Math.random() > 0.5) {
+      if (Math.random() > (1 - scanLineChance)) {
         ctx.fillRect(0, y, w, 1);
       }
     }
 
     // Occasional full-frame static burst
-    if (Math.random() < 0.03) {
-      Renderer.noise(ctx, w, h, 0.15);
+    if (Math.random() < 0.03 * noiseMultiplier) {
+      Renderer.noise(ctx, w, h, 0.15 * noiseMultiplier);
     }
 
     // Light ambient noise
-    Renderer.noise(ctx, w, h, 0.04);
+    Renderer.noise(ctx, w, h, 0.04 * noiseMultiplier);
 
     // Horizontal glitch lines
-    const glitchCount = Math.floor(Math.random() * 3);
+    const glitchCount = Math.floor(Math.random() * 3 * noiseMultiplier);
     for (let i = 0; i < glitchCount; i++) {
       const y = Math.random() * h;
       const lineH = Math.random() * 6 + 2;
-      ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.08})`;
+      ctx.fillStyle = `rgba(255, 255, 255, ${Math.random() * 0.08 * noiseMultiplier})`;
       ctx.fillRect(0, y, w, lineH);
     }
 
