@@ -3,10 +3,11 @@ import { i18n } from '../i18n/index.js';
 import { eventBus } from '../engine/EventBus.js';
 
 export class TitleScene {
-  constructor({ onSceneChange, inputManager, audioManager }) {
+  constructor({ onSceneChange, inputManager, audioManager, sfxManager }) {
     this._onSceneChange = onSceneChange;
     this._inputManager = inputManager;
     this._audioManager = audioManager;
+    this._sfxManager = sfxManager;
     this._buttons = [];
     this._pulsePhase = 0;
   }
@@ -131,6 +132,7 @@ export class TitleScene {
   }
 
   _handleButtonClick(label) {
+    this._sfxManager?.play('buttonClick');
     if (label === i18n.t('menuPlay')) {
       this._onSceneChange(SCENES.NIGHT_SELECT);
     } else if (label === i18n.t('menuSettings')) {

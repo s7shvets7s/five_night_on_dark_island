@@ -13,6 +13,9 @@ export class AudioManager {
     this._sfxVolume = 0.8;
     this._musicVolume = 0.5;
     this._ambienceVolume = 0.5;
+    this._cameraStaticSource = null;
+    this._cameraStaticGain = null;
+    this._cameraStaticBuffer = null;
     this._muted = false;
     this._activeLoops = new Map();
     this._initialized = false;
@@ -129,6 +132,14 @@ export class AudioManager {
     }
   }
 
+  /** Set SFX volume (0-1) — used by SFXManager for HTMLAudio playback */
+  setMasterSFXVolume(vol) {
+    this._sfxVolume = Math.max(0, Math.min(1, vol));
+    if (this._sfxGain) {
+      this._sfxGain.gain.value = this._sfxVolume;
+    }
+  }
+
   /** Set music volume (0-1) */
   setMusicVolume(vol) {
     this._musicVolume = Math.max(0, Math.min(1, vol));
@@ -217,4 +228,91 @@ export class AudioManager {
 
   /** @returns {number} */
   get masterVolume() { return this._masterVolume; }
+
+  // ==================== Camera Static Noise ====================
+
+  /**
+   * Generate a white noise buffer for camera static.
+   * @param {number} duration - Buffer duration in seconds
+   * @returns {AudioBuffer}
+   * @private
+   */
+  _createStaticNoiseBuffer(duration = 2) {
+    if (this._cameraStaticBuffer) return this._cameraStaticBuffer;
+
+    const sampleRate = this._ctx.sampleRate;
+    const length = sampleRate * duration;
+    const buffer = this._ctx.createBuffer(1, length, sampleRate);
+    const data = buffer.getChannelData(0);
+
+    for (let i = 0; i < length; i++) {
+      data[i] = (Math.random() * 2 - 1) * 0.5;
+    }
+
+    this._cameraStaticBuffer = buffer;
+    return buffer;
+  }
+
+  /**
+   * Start continuous camera static noise loop.
+   * @param {number} volume - Volume 0-1
+   */
+  startCameraStaticNoise(volume = 0.1) {
+    if (!this._initialized || this._muted) return;
+    this.stopCameraStaticNoise();
+
+    try {
+      const buffer = this._createStaticNoiseBuffer(2);
+
+      this._cameraStaticSource = this._ctx.createBufferSource();
+      this._cameraStaticSource.buffer = buffer;
+      this._cameraStaticSource.loop = true;
+
+      // Filter to make it sound like old TV/monitor
+      const filter = this._ctx.createBiquadFilter();
+      filter.type = 'bandpass';
+      filter.frequency.value = 2000;
+      filter.Q.value = 0.5;
+
+      this._cameraStaticGain = this._ctx.createGain();
+      this._cameraStaticGain.gain.value = volume;
+
+      this._cameraStaticSource.connect(filter);
+      filter.connect(this._cameraStaticGain);
+      this._cameraStaticGain.connect(this._sfxGain);
+
+      this._cameraStaticSource.start();
+    } catch (e) {
+      console.warn('[AudioManager] Failed to start camera static noise:', e);
+    }
+  }
+
+  /**
+   * Stop camera static noise.
+   */
+  stopCameraStaticNoise() {
+    try {
+      if (this._cameraStaticSource) {
+        this._cameraStaticSource.stop();
+        this._cameraStaticSource.disconnect();
+        this._cameraStaticSource = null;
+      }
+      if (this._cameraStaticGain) {
+        this._cameraStaticGain.disconnect();
+        this._cameraStaticGain = null;
+      }
+    } catch (e) {
+      // Ignore cleanup errors
+    }
+  }
+
+  /**
+   * Set camera static noise volume.
+   * @param {number} volume - Volume 0-1
+   */
+  setCameraStaticVolume(volume) {
+    if (this._cameraStaticGain) {
+      this._cameraStaticGain.gain.value = Math.max(0, Math.min(1, volume));
+    }
+  }
 }

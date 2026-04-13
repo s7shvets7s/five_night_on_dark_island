@@ -10,12 +10,15 @@ export class PauseScene {
    * @param {Object} deps
    * @param {Function} deps.onSceneChange
    * @param {Object} deps.inputManager
+   * @param {Object} [deps.sfxManager]
    */
-  constructor({ onSceneChange, onResume, inputManager }) {
+  constructor({ onSceneChange, onResume, inputManager, sfxManager }) {
     this._onSceneChange = onSceneChange;
     this._onResume = onResume;
     this._inputManager = inputManager;
+    this._sfxManager = sfxManager;
     this._buttons = [];
+    this._pointerDownHandler = null;
   }
 
   enter() {
@@ -23,7 +26,10 @@ export class PauseScene {
   }
 
   exit() {
-    this._inputManager.clearAll();
+    if (this._pointerDownHandler) {
+      this._inputManager.off('pointerdown', this._pointerDownHandler);
+      this._pointerDownHandler = null;
+    }
   }
 
   update() {}
@@ -91,17 +97,19 @@ export class PauseScene {
   }
 
   _bindInput() {
-    this._inputManager.on('pointerdown', (x, y) => {
+    this._pointerDownHandler = (x, y) => {
       for (const btn of this._buttons) {
         if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
           this._handleButtonClick(btn.label);
           return;
         }
       }
-    });
+    };
+    this._inputManager.on('pointerdown', this._pointerDownHandler);
   }
 
   _handleButtonClick(label) {
+    this._sfxManager?.play('buttonClick');
     if (label === i18n.t('pauseResume')) {
       if (this._onResume) {
         this._onResume();

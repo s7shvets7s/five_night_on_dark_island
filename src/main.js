@@ -10,6 +10,8 @@ import { VictoryScene } from './scenes/VictoryScene.js';
 import { PauseScene } from './scenes/PauseScene.js';
 import { ConfirmExitScene } from './scenes/ConfirmExitScene.js';
 import { AudioManager } from './engine/AudioManager.js?v=14';
+import { SFXManager } from './engine/SFXManager.js';
+import { SFX } from './config/sfxConfig.js';
 import { eventBus } from './engine/EventBus.js';
 import { i18n } from './i18n/index.js';
 import { gameState } from './config/gameConfig.js';
@@ -27,6 +29,9 @@ async function bootstrap() {
 
   const game = new Game(canvas);
   const audioManager = new AudioManager();
+  const sfxManager = new SFXManager(audioManager);
+  sfxManager.loadAll(SFX);
+  sfxManager.enableRandom(true);
 
   i18n.setLocale(gameState.getLocale());
 
@@ -65,6 +70,7 @@ async function bootstrap() {
       onPause: () => game.sceneManager.push(SCENES.PAUSE),
       inputManager: game.inputManager,
       audioManager,
+      sfxManager,
       assetLoader: game.assetLoader,
       nightId,
     });
@@ -76,6 +82,7 @@ async function bootstrap() {
     onResume: () => game.sceneManager.pop(),
     inputManager: game.inputManager,
     audioManager,
+    sfxManager,
   };
 
   game.registerScene(SCENES.BOOT, new BootScene(sceneDeps));
@@ -119,6 +126,7 @@ async function bootstrap() {
   ];
   audioManager.setPlaylist(musicTracks);
   audioManager.setMusicVolume(gameState.getMusicVolume());
+  audioManager.setMasterSFXVolume(gameState.getSFXVolume());
 
   document.addEventListener('click', () => {
     audioManager.init();

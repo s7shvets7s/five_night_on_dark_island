@@ -27,14 +27,16 @@ export class NightScene {
    * @param {Function} [deps.onPause]
    * @param {Object} deps.inputManager
    * @param {Object} [deps.audioManager]
+   * @param {Object} [deps.sfxManager]
    * @param {Object} [deps.assetLoader]
    * @param {number} [deps.nightId]
    */
-  constructor({ onSceneChange, onPause, inputManager, audioManager, assetLoader, nightId }) {
+  constructor({ onSceneChange, onPause, inputManager, audioManager, sfxManager, assetLoader, nightId }) {
     this._onSceneChange = onSceneChange;
     this._onPause = onPause;
     this._inputManager = inputManager;
     this._audioManager = audioManager;
+    this._sfxManager = sfxManager;
     this._assetLoader = assetLoader;
 
     this._powerSystem = new PowerSystem({ eventBus });
@@ -91,6 +93,7 @@ export class NightScene {
     this._clockSystem.reset(this._nightConfig.durationMs);
     this._officeSystem.reset();
     this._cameraSystem.close();
+    this._audioManager?.stopCameraStaticNoise();
 
     this._enemies = [];
     this._enemyStartHours = new Map();
@@ -117,6 +120,7 @@ export class NightScene {
     }
 
     this._bindInput();
+    this._bindSFX();
     this._updateHUD();
   }
 
@@ -126,8 +130,96 @@ export class NightScene {
   }
 
   exit() {
+    this._unbindSFX();
+    this._audioManager?.stopCameraStaticNoise();
     this._inputManager.clearAll();
   }
+
+  /** Bind SFX playback to game events via EventBus. */
+  _bindSFX() {
+    if (!this._sfxManager) return;
+
+    // Door sounds
+    eventBus.on('door:toggle', this._onDoorToggleSFX);
+    // Light sounds
+    eventBus.on('light:toggle', this._onLightToggleSFX);
+    // Camera sounds
+    eventBus.on('camera:switch', this._onCameraSwitchSFX);
+    eventBus.on('camera:glitch', this._onCameraGlitchSFX);
+    eventBus.on('camera:glitch:fail', this._onCameraGlitchFailSFX);
+    // Jumpscare
+    eventBus.on('jumpscare:trigger', this._onJumpscareSFX);
+    // Generator
+    eventBus.on('generator:active', this._onGeneratorActiveSFX);
+    eventBus.on('generator:success', this._onGeneratorSuccessSFX);
+    eventBus.on('generator:fail', this._onGeneratorFailSFX);
+    // Enemy movement (sparse, atmospheric)
+    eventBus.on('enemy:move', this._onEnemyMoveSFX);
+    eventBus.on('enemy:return', this._onEnemyReturnSFX);
+  }
+
+  /** Unbind SFX event listeners. */
+  _unbindSFX() {
+    if (!this._sfxManager) return;
+
+    eventBus.off('door:toggle', this._onDoorToggleSFX);
+    eventBus.off('light:toggle', this._onLightToggleSFX);
+    eventBus.off('camera:switch', this._onCameraSwitchSFX);
+    eventBus.off('camera:glitch', this._onCameraGlitchSFX);
+    eventBus.off('camera:glitch:fail', this._onCameraGlitchFailSFX);
+    eventBus.off('jumpscare:trigger', this._onJumpscareSFX);
+    eventBus.off('generator:active', this._onGeneratorActiveSFX);
+    eventBus.off('generator:success', this._onGeneratorSuccessSFX);
+    eventBus.off('generator:fail', this._onGeneratorFailSFX);
+    eventBus.off('enemy:move', this._onEnemyMoveSFX);
+    eventBus.off('enemy:return', this._onEnemyReturnSFX);
+  }
+
+  // ==================== SFX Event Handlers ====================
+
+  _onDoorToggleSFX = ({ isOpen }) => {
+    this._sfxManager?.play(isOpen ? 'doorOpen' : 'doorClose');
+  };
+
+  _onLightToggleSFX = ({ isOn }) => {
+    this._sfxManager?.play(isOn ? 'lightOn' : 'lightOff');
+  };
+
+  _onCameraSwitchSFX = () => {
+    this._sfxManager?.play('cameraSwitch');
+  };
+
+  _onCameraGlitchSFX = ({ active }) => {
+    if (active) this._sfxManager?.play('cameraGlitchStart');
+  };
+
+  _onCameraGlitchFailSFX = () => {
+    this._sfxManager?.play('cameraGlitchFail');
+  };
+
+  _onJumpscareSFX = () => {
+    this._sfxManager?.play('enemyJumpscare');
+  };
+
+  _onGeneratorActiveSFX = () => {
+    this._sfxManager?.play('generatorStart');
+  };
+
+  _onGeneratorSuccessSFX = () => {
+    this._sfxManager?.play('generatorSuccess');
+  };
+
+  _onGeneratorFailSFX = () => {
+    this._sfxManager?.play('generatorFail');
+  };
+
+  _onEnemyMoveSFX = () => {
+    this._sfxManager?.play('enemyMove');
+  };
+
+  _onEnemyReturnSFX = () => {
+    this._sfxManager?.play('enemyReturn');
+  };
 
   /**
    * @param {number} dt
@@ -190,11 +282,15 @@ export class NightScene {
         this._maskActive = false;
         this._maskOxygen = 0;
         this._maskCooldown = CONFIG.MASK_COOLDOWN;
+        this._sfxManager?.play('maskOff');
       }
     } else if (this._maskCooldown > 0) {
       this._maskCooldown -= dt;
       if (this._maskCooldown < 0) this._maskCooldown = 0;
     }
+
+    // Power-low warning
+    this._sfxManager?.playPowerLow(this._powerSystem.getPowerPercent());
 
     this._updateHUD();
   }
@@ -611,6 +707,8 @@ export class NightScene {
     this._powerOut = true;
     this._officeSystem.reset();
     this._cameraSystem.close();
+    this._audioManager?.stopCameraStaticNoise();
+    this._sfxManager?.play('powerOut');
   }
 
   _onJumpscare(enemy) {
@@ -665,9 +763,13 @@ export class NightScene {
       if (this._isInRect(pos, toggleBounds)) {
         if (this._cameraSystem.isActive) {
           this._cameraSystem.close();
+          this._audioManager?.stopCameraStaticNoise();
+          this._sfxManager?.play('cameraClose');
         } else {
           this._glitchMiniGame.onReturnToCamera();
           this._cameraSystem.open();
+          this._audioManager?.startCameraStaticNoise(0.1);
+          this._sfxManager?.play('cameraOpen');
         }
         return;
       }
@@ -681,9 +783,11 @@ export class NightScene {
         if (this._maskActive) {
           this._maskActive = false;
           this._maskOxygen = 0;
+          this._sfxManager?.play('maskOff');
         } else {
           this._maskActive = true;
           this._maskOxygen = 10;
+          this._sfxManager?.play('maskOn');
         }
         return;
       }

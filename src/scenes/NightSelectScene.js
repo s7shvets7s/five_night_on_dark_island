@@ -4,9 +4,10 @@ import { i18n } from '../i18n/index.js';
 import { eventBus } from '../engine/EventBus.js';
 
 export class NightSelectScene {
-  constructor({ onSceneChange, inputManager }) {
+  constructor({ onSceneChange, inputManager, sfxManager }) {
     this._onSceneChange = onSceneChange;
     this._inputManager = inputManager;
+    this._sfxManager = sfxManager;
     this._buttons = [];
   }
 
@@ -153,6 +154,8 @@ export class NightSelectScene {
       for (const btn of this._buttons) {
         if (x >= btn.x && x <= btn.x + btn.w && y >= btn.y && y <= btn.y + btn.h) {
           if (!btn.enabled) return;
+
+          this._sfxManager?.play('buttonClick');
 
           if (btn.nightId) {
             eventBus.emit('game:night-change', { nightId: btn.nightId });

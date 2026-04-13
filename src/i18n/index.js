@@ -16,6 +16,7 @@ const TRANSLATIONS = {
     settingsLanguage: 'Язык',
     settingsVolume: 'Громкость',
     settingsMusic: 'Музыка',
+    settingsSFX: 'Звуки',
     settingsBack: 'НАЗАД',
 
     // Game HUD
@@ -97,6 +98,7 @@ const TRANSLATIONS = {
     settingsLanguage: 'Language',
     settingsVolume: 'Volume',
     settingsMusic: 'Music',
+    settingsSFX: 'SFX',
     settingsBack: 'BACK',
 
     // Game HUD
