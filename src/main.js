@@ -13,7 +13,7 @@ import { eventBus } from './engine/EventBus.js';
  * Application bootstrap.
  * Creates the Game instance, registers scenes, and starts the loop.
  */
-function bootstrap() {
+async function bootstrap() {
   const canvas = document.getElementById('game-canvas');
   if (!canvas) {
     console.error('[Bootstrap] Canvas element not found');
@@ -49,11 +49,6 @@ function bootstrap() {
     enemies_freddy_attack: 'enemies/freddy_attack.png',
   };
   game.assetLoader.queueImages(imageManifest);
-  game.assetLoader.loadAll().then(() => {
-    console.log('[Bootstrap] Assets loaded');
-  }).catch(() => {
-    console.log('[Bootstrap] Assets load error (using placeholders)');
-  });
 
   let currentNightId = 1;
 
@@ -88,7 +83,6 @@ function bootstrap() {
     game.registerScene(SCENES.NIGHT, createNightScene(currentNightId));
   });
 
-  // Hook into scene pop to resume the NightScene
   const originalPop = game.sceneManager.pop.bind(game.sceneManager);
   game.sceneManager.pop = () => {
     const top = game.sceneManager._stack[game.sceneManager._stack.length - 1];
@@ -98,8 +92,14 @@ function bootstrap() {
     originalPop();
   };
 
-  game.start();
+  try {
+    await game.assetLoader.loadAll();
+    console.log('[Bootstrap] Assets loaded');
+  } catch (e) {
+    console.log('[Bootstrap] Assets load error (using placeholders)');
+  }
 
+  game.start();
   console.log(`[Bootstrap] ${GAME_TITLE} v${GAME_VERSION} started`);
 }
 

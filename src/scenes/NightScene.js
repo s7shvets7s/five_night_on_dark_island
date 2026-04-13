@@ -411,23 +411,6 @@ export class NightScene {
         ctx.fillRect(x + size / 2 + i * size * 0.1 - 2, y + size * 0.65, 4, 5);
       }
     }
-
-    // Multiply blend darkening when light is off
-    if (!lightOn) {
-      ctx.save();
-      ctx.globalCompositeOperation = 'multiply';
-      ctx.fillStyle = '#1a1a1a';
-      ctx.beginPath();
-      ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
-      ctx.fill();
-      // Also darken the eyes
-      ctx.fillStyle = '#000000';
-      ctx.beginPath();
-      ctx.arc(x + size * 0.35, y + size * 0.35, size * 0.1, 0, Math.PI * 2);
-      ctx.arc(x + size * 0.65, y + size * 0.35, size * 0.1, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
   }
 
   _renderCameraView(ctx, w, h) {

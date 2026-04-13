@@ -3,6 +3,7 @@
  */
 import { Renderer } from '../engine/Renderer.js';
 import { ENEMY_CONFIG } from '../config/enemyConfig.js';
+import { CONFIG } from '../config/gameConfig.js';
 
 export class CameraSystem {
   /**
@@ -208,12 +209,12 @@ export class CameraSystem {
   }
 
   _drawEnemyIndicator(ctx, w, h, enemy, room) {
-    const enemyX = room?.enemyX ?? 0.5;
-    const x = enemyX * w;
-
     const seed = (enemy.id.charCodeAt(0) * 7 + (enemy.id.charCodeAt(1) || 0) * 13) % 100;
-    const baseY = 0.25 + (seed / 100) * 0.5;
-    const y = baseY * h;
+    const baseX = 0.2 + (seed / 100) * 0.6;
+    const x = baseX * w;
+
+    const enemyY = room?.enemyY ?? 0.5;
+    const y = enemyY * h;
 
     const enemyScale = room?.enemyScale ?? 1.0;
     const size = 35 * enemyScale;
@@ -223,9 +224,14 @@ export class CameraSystem {
     const spriteKey = spriteFilename ? `enemies_${spriteFilename.replace('.png', '')}` : null;
     const sprite = spriteKey ? this._assetLoader?.getImage(spriteKey) : null;
 
+    const drawSize = size * 2;
+
     if (sprite && sprite.complete && sprite.naturalWidth > 0) {
-      const drawSize = size * 2;
+      const brightness = CONFIG.CAMERA_ENEMY_BRIGHTNESS;
+      const saturation = CONFIG.CAMERA_ENEMY_SATURATION;
+      ctx.filter = `brightness(${brightness}) saturate(${saturation}%)`;
       ctx.drawImage(sprite, x - drawSize / 2, y - drawSize / 2, drawSize, drawSize);
+      ctx.filter = 'none';
     } else {
       ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
       ctx.beginPath();
