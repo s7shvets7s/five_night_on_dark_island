@@ -23,7 +23,7 @@ function bootstrap() {
   const game = new Game(canvas);
   const audioManager = new AudioManager();
 
-  const cameraImages = {
+  const imageManifest = {
     cameras_helipad: 'cameras/helipad.png',
     cameras_golden_temple: 'cameras/golden_temple.png',
     cameras_staff_quarters: 'cameras/staff_quarters.png',
@@ -36,8 +36,19 @@ function bootstrap() {
     office_bg_left_dor_close: 'office/office_bg_left_dor_close.png',
     office_bg_right_dor_slose: 'office/office_bg_right_dor_slose.png',
     office_bg_all_dors_close: 'office/office_bg_all_dors_close.png',
+    enemies_millioner: 'enemies/millioner.png',
+    enemies_president: 'enemies/president.png',
+    enemies_since: 'enemies/since.png',
+    enemies_bonnie_door: 'enemies/bonnie_door.png',
+    enemies_chica_door: 'enemies/chica_door.png',
+    enemies_foxy_door: 'enemies/foxy_door.png',
+    enemies_freddy_door: 'enemies/freddy_door.png',
+    enemies_bonnie_attack: 'enemies/bonnie_attack.png',
+    enemies_chica_attack: 'enemies/chica_attack.png',
+    enemies_foxy_attack: 'enemies/foxy_attack.png',
+    enemies_freddy_attack: 'enemies/freddy_attack.png',
   };
-  game.assetLoader.queueImages(cameraImages);
+  game.assetLoader.queueImages(imageManifest);
   game.assetLoader.loadAll().then(() => {
     console.log('[Bootstrap] Assets loaded');
   }).catch(() => {

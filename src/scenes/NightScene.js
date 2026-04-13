@@ -371,42 +371,45 @@ export class NightScene {
     const y = yOffset;
     const size = w * 0.07;
 
-    // Shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-    ctx.beginPath();
-    ctx.ellipse(x + size / 2, y + size * 0.8, size * 0.4, size * 0.1, 0, 0, Math.PI * 2);
-    ctx.fill();
+    const enemyConfig = ENEMY_CONFIG[enemy.id];
+    const spriteFilename = enemyConfig?.sprites?.atDoor;
+    const spriteKey = spriteFilename ? `enemies_${spriteFilename.replace('.png', '')}` : null;
+    const sprite = spriteKey ? this._assetLoader?.getImage(spriteKey) : null;
 
-    // Body
-    ctx.fillStyle = enemy.color || '#ff0000';
-    ctx.beginPath();
-    ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
-    ctx.fill();
+    if (sprite && sprite.complete && sprite.naturalWidth > 0) {
+      ctx.drawImage(sprite, x, y, size, size);
+    } else {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.beginPath();
+      ctx.ellipse(x + size / 2, y + size * 0.8, size * 0.4, size * 0.1, 0, 0, Math.PI * 2);
+      ctx.fill();
 
-    // Eyes — glowing white (only when light is on)
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(x + size * 0.35, y + size * 0.35, size * 0.1, 0, Math.PI * 2);
-    ctx.arc(x + size * 0.65, y + size * 0.35, size * 0.1, 0, Math.PI * 2);
-    ctx.fill();
+      ctx.fillStyle = enemy.color || '#ff0000';
+      ctx.beginPath();
+      ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+      ctx.fill();
 
-    // Pupils
-    ctx.fillStyle = '#000000';
-    ctx.beginPath();
-    ctx.arc(x + size * 0.35, y + size * 0.35, size * 0.04, 0, Math.PI * 2);
-    ctx.arc(x + size * 0.65, y + size * 0.35, size * 0.04, 0, Math.PI * 2);
-    ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(x + size * 0.35, y + size * 0.35, size * 0.1, 0, Math.PI * 2);
+      ctx.arc(x + size * 0.65, y + size * 0.35, size * 0.1, 0, Math.PI * 2);
+      ctx.fill();
 
-    // Mouth
-    ctx.fillStyle = '#000000';
-    ctx.beginPath();
-    ctx.arc(x + size / 2, y + size * 0.65, size * 0.15, 0, Math.PI);
-    ctx.fill();
+      ctx.fillStyle = '#000000';
+      ctx.beginPath();
+      ctx.arc(x + size * 0.35, y + size * 0.35, size * 0.04, 0, Math.PI * 2);
+      ctx.arc(x + size * 0.65, y + size * 0.35, size * 0.04, 0, Math.PI * 2);
+      ctx.fill();
 
-    // Teeth
-    ctx.fillStyle = '#ffffff';
-    for (let i = -1; i <= 1; i++) {
-      ctx.fillRect(x + size / 2 + i * size * 0.1 - 2, y + size * 0.65, 4, 5);
+      ctx.fillStyle = '#000000';
+      ctx.beginPath();
+      ctx.arc(x + size / 2, y + size * 0.65, size * 0.15, 0, Math.PI);
+      ctx.fill();
+
+      ctx.fillStyle = '#ffffff';
+      for (let i = -1; i <= 1; i++) {
+        ctx.fillRect(x + size / 2 + i * size * 0.1 - 2, y + size * 0.65, 4, 5);
+      }
     }
 
     // Multiply blend darkening when light is off

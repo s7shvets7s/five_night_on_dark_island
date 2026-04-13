@@ -2,6 +2,7 @@
  * CameraSystem — manages camera switching and state.
  */
 import { Renderer } from '../engine/Renderer.js';
+import { ENEMY_CONFIG } from '../config/enemyConfig.js';
 
 export class CameraSystem {
   /**
@@ -207,51 +208,52 @@ export class CameraSystem {
   }
 
   _drawEnemyIndicator(ctx, w, h, enemy, room) {
-    // Stable position based on room layout
-    const roomX = room?.x ?? 0;
-    const roomY = room?.y ?? 0;
+    const enemyX = room?.enemyX ?? 0.5;
+    const x = enemyX * w;
 
-    // Map room position to screen position
-    const baseX = w * 0.3 + (roomX + 0.5) * w * 0.4;
-    const baseY = h * 0.35 + (roomY + 0.5) * h * 0.35;
+    const seed = (enemy.id.charCodeAt(0) * 7 + (enemy.id.charCodeAt(1) || 0) * 13) % 100;
+    const baseY = 0.25 + (seed / 100) * 0.5;
+    const y = baseY * h;
 
-    // Subtle idle animation — slow breathing
-    const breathe = Math.sin(Date.now() * 0.003) * 3;
+    const enemyScale = room?.enemyScale ?? 1.0;
+    const size = 35 * enemyScale;
 
-    const x = baseX + breathe;
-    const y = baseY + breathe;
-    const size = 35;
+    const enemyConfig = ENEMY_CONFIG[enemy.id];
+    const spriteFilename = enemyConfig?.sprites?.idle;
+    const spriteKey = spriteFilename ? `enemies_${spriteFilename.replace('.png', '')}` : null;
+    const sprite = spriteKey ? this._assetLoader?.getImage(spriteKey) : null;
 
-    // Shadow
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
-    ctx.beginPath();
-    ctx.ellipse(x, y + size * 0.6, size * 0.5, size * 0.15, 0, 0, Math.PI * 2);
-    ctx.fill();
+    if (sprite && sprite.complete && sprite.naturalWidth > 0) {
+      const drawSize = size * 2;
+      ctx.drawImage(sprite, x - drawSize / 2, y - drawSize / 2, drawSize, drawSize);
+    } else {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+      ctx.beginPath();
+      ctx.ellipse(x, y + size * 0.6, size * 0.5, size * 0.15, 0, 0, Math.PI * 2);
+      ctx.fill();
 
-    // Body
-    ctx.fillStyle = enemy.color || '#ff0000';
-    ctx.beginPath();
-    ctx.arc(x, y, size / 2, 0, Math.PI * 2);
-    ctx.fill();
+      ctx.fillStyle = enemy.color || '#ff0000';
+      ctx.beginPath();
+      ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+      ctx.fill();
 
-    // Eyes
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(x - 6, y - 5, 4, 0, Math.PI * 2);
-    ctx.arc(x + 6, y - 5, 4, 0, Math.PI * 2);
-    ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.arc(x - 6, y - 5, 4, 0, Math.PI * 2);
+      ctx.arc(x + 6, y - 5, 4, 0, Math.PI * 2);
+      ctx.fill();
 
-    ctx.fillStyle = '#000000';
-    ctx.beginPath();
-    ctx.arc(x - 5, y - 5, 2, 0, Math.PI * 2);
-    ctx.arc(x + 7, y - 5, 2, 0, Math.PI * 2);
-    ctx.fill();
+      ctx.fillStyle = '#000000';
+      ctx.beginPath();
+      ctx.arc(x - 5, y - 5, 2, 0, Math.PI * 2);
+      ctx.arc(x + 7, y - 5, 2, 0, Math.PI * 2);
+      ctx.fill();
 
-    // Name label
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 13px Courier New';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText(enemy.name, x, y + size * 0.5 + 5);
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 13px Courier New';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText(enemy.name, x, y + size * 0.5 + 5);
+    }
   }
 }

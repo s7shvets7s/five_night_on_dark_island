@@ -45,7 +45,7 @@ export const ENEMY_CONFIG = {
     name: 'Bonnie',
     color: '#6644aa',
     sprites: {
-      idle: 'bonnie_idle.png',
+      idle: 'millioner.png',
       atDoor: 'bonnie_door.png',
       attack: 'bonnie_attack.png',
     },
@@ -79,7 +79,7 @@ export const ENEMY_CONFIG = {
     name: 'Chica',
     color: '#ccaa22',
     sprites: {
-      idle: 'chica_idle.png',
+      idle: 'president.png',
       atDoor: 'chica_door.png',
       attack: 'chica_attack.png',
     },
@@ -112,7 +112,7 @@ export const ENEMY_CONFIG = {
     name: 'Foxy',
     color: '#ff4400',
     sprites: {
-      idle: 'foxy_idle.png',
+      idle: 'since.png',
       atDoor: 'foxy_door.png',
       attack: 'foxy_attack.png',
     },
