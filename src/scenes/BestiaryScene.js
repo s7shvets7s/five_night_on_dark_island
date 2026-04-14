@@ -155,7 +155,30 @@ export class BestiaryScene {
     const sprite = this._assetLoader?.getImage(spriteKey);
 
     if (sprite && sprite.complete && sprite.naturalWidth > 0) {
+      // Grayscale filter for dossier photo effect
+      ctx.save();
+      ctx.filter = 'saturate(0%) brightness(80%)';
       ctx.drawImage(sprite, spriteX, spriteY, spriteSize, spriteSize);
+      ctx.restore();
+
+      // Black square/shadow over the face area (upper half of sprite)
+      const faceH = spriteSize * 0.35;
+      const faceY = spriteY + spriteSize * 0.12;
+      const faceX = spriteX + spriteSize * 0.15;
+      const faceW = spriteSize * 0.7;
+
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+      ctx.fillRect(faceX, faceY, faceW, faceH);
+
+      // Subtle vignette around face block
+      const faceGlow = ctx.createRadialGradient(
+        faceX + faceW / 2, faceY + faceH / 2, faceW * 0.3,
+        faceX + faceW / 2, faceY + faceH / 2, faceW * 0.8
+      );
+      faceGlow.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      faceGlow.addColorStop(1, 'rgba(0, 0, 0, 0.4)');
+      ctx.fillStyle = faceGlow;
+      ctx.fillRect(spriteX, spriteY, spriteSize, spriteSize);
     } else {
       // Fallback: draw colored circle with name
       ctx.fillStyle = config.color || '#6644aa';
