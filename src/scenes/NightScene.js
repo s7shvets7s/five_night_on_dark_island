@@ -439,6 +439,7 @@ export class NightScene {
     // Debug: force-spawn one enemy sprite at left door for visual positioning
     if (CONFIG.DEBUG_ENEMY_AT_DOOR) {
       this._renderDebugEnemyAtDoor(ctx, 'left', officeX, officeW, w, h);
+      this._renderDebugEnemyAtDoor(ctx, 'right', officeX, officeW, w, h);
     }
   }
 
@@ -549,32 +550,23 @@ export class NightScene {
    * Render enemy silhouette with noise when light is OFF.
    */
   _renderEnemySilhouette(ctx, enemy, x, y, size, w, h) {
-    // Dark body
-    ctx.fillStyle = 'rgba(20, 20, 20, 0.85)';
-    ctx.beginPath();
-    ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
-    ctx.fill();
+    const enemyConfig = ENEMY_CONFIG[enemy.id];
+    const spriteFilename = enemyConfig?.sprites?.atDoor;
+    const spriteKey = spriteFilename ? `enemies_${spriteFilename.replace('.png', '')}` : null;
+    const sprite = spriteKey ? this._assetLoader?.getImage(spriteKey) : null;
 
-    // Shadow on ground
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-    ctx.beginPath();
-    ctx.ellipse(x + size / 2, y + size * 0.85, size * 0.4, size * 0.1, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Faint eyes — barely visible
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
-    ctx.beginPath();
-    ctx.arc(x + size * 0.35, y + size * 0.35, size * 0.08, 0, Math.PI * 2);
-    ctx.arc(x + size * 0.65, y + size * 0.35, size * 0.08, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Static noise overlay (like camera effect)
-    const noiseCount = Math.floor(size * 0.3);
-    ctx.fillStyle = 'rgba(100, 100, 100, 0.15)';
-    for (let i = 0; i < noiseCount; i++) {
-      const nx = x + Math.random() * size;
-      const ny = y + Math.random() * size;
-      ctx.fillRect(nx, ny, 1, 1);
+    if (sprite && sprite.complete && sprite.naturalWidth > 0) {
+      // Render sprite as pure black silhouette
+      ctx.save();
+      ctx.filter = 'brightness(0%)';
+      ctx.drawImage(sprite, x, y, size, size);
+      ctx.restore();
+    } else {
+      // Fallback: dark circle
+      ctx.fillStyle = 'rgba(10, 10, 10, 0.95)';
+      ctx.beginPath();
+      ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 
