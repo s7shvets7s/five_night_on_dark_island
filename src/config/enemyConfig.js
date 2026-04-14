@@ -38,6 +38,9 @@ export const DOOR_POSITIONS_PERCENT = {
   right: { x: DOOR_POSITIONS.right.x / DOOR_IMAGE_SIZE.width, y: DOOR_POSITIONS.right.y / DOOR_IMAGE_SIZE.height },
 };
 
+/** Enemy sprite size at door as fraction of canvas width */
+export const DOOR_ENEMY_SIZE = 0.4;
+
 // ============================================================
 // ENEMY CONFIG — конфиг каждого врага
 // ============================================================

@@ -3,7 +3,7 @@
  * Manages office view, camera system, all game systems integration.
  */
 import { SCENES, COLORS, UI, CONFIG, gameState, POWER_DRAIN_MULTIPLIERS, RANDOM_AD_CHANCE } from '../config/gameConfig.js';
-import { ENEMY_CONFIG, ENEMY_MAP, DOOR_POSITIONS_PERCENT, DOOR_IMAGE_SIZE, ENEMY_STATES } from '../config/enemyConfig.js';
+import { ENEMY_CONFIG, ENEMY_MAP, DOOR_POSITIONS_PERCENT, DOOR_IMAGE_SIZE, ENEMY_STATES, DOOR_ENEMY_SIZE } from '../config/enemyConfig.js';
 import { PowerSystem } from '../systems/PowerSystem.js';
 import { CameraSystem } from '../systems/CameraSystem.js';
 import { ClockSystem } from '../systems/ClockSystem.js';
@@ -493,7 +493,7 @@ export class NightScene {
     // Position relative to the stretched background
     const x = officeX + (doorPos.x * officeW) + (enemyOffset.x * officeW / DOOR_IMAGE_SIZE.width);
     const y = (doorPos.y * h) + (enemyOffset.y * h / DOOR_IMAGE_SIZE.height);
-    const size = w * 0.035;
+    const size = w * DOOR_ENEMY_SIZE;
 
     if (lightOn) {
       // Light ON — render bright sprite
@@ -521,7 +521,7 @@ export class NightScene {
     const debugConfig = ENEMY_CONFIG[debugEnemyId];
 
     const doorPos = side === 'left' ? DOOR_POSITIONS_PERCENT.left : DOOR_POSITIONS_PERCENT.right;
-    const size = w * 0.035;
+    const size = w * DOOR_ENEMY_SIZE;
 
     const x = officeX + (doorPos.x * officeW);
     const y = (doorPos.y * h);
