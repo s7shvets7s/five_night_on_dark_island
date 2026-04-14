@@ -4,6 +4,7 @@ import { BootScene } from './scenes/BootScene.js';
 import { TitleScene } from './scenes/TitleScene.js';
 import { NightSelectScene } from './scenes/NightSelectScene.js';
 import { SettingsScene } from './scenes/SettingsScene.js';
+import { BestiaryScene } from './scenes/BestiaryScene.js';
 import { NightScene } from './scenes/NightScene.js';
 import { GameOverScene } from './scenes/GameOverScene.js';
 import { VictoryScene } from './scenes/VictoryScene.js';
@@ -124,6 +125,7 @@ async function bootstrap() {
     inputManager: game.inputManager,
     audioManager,
     sfxManager,
+    assetLoader: game.assetLoader,
     ads,
   };
 
@@ -131,6 +133,7 @@ async function bootstrap() {
   game.registerScene(SCENES.TITLE, new TitleScene(sceneDeps));
   game.registerScene(SCENES.NIGHT_SELECT, new NightSelectScene(sceneDeps));
   game.registerScene(SCENES.SETTINGS, new SettingsScene(sceneDeps));
+  game.registerScene(SCENES.BESTIARY, new BestiaryScene(sceneDeps));
   game.registerScene(SCENES.GAME_OVER, new GameOverScene(sceneDeps));
   game.registerScene(SCENES.PAUSE, new PauseScene(sceneDeps));
   game.registerScene(SCENES.CONFIRM_EXIT, new ConfirmExitScene(sceneDeps));
