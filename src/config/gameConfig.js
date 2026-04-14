@@ -7,6 +7,7 @@
 /** Debug and development flags */
 export const CONFIG = {
   DEBUG: false,
+  DEBUG_ENEMY_AT_DOOR: false,
   USE_PLACEHOLDER_ASSETS: false,
   AUTO_WIN_FOR_TEST: false,
   DISABLE_ADS: false,
@@ -79,6 +80,7 @@ export const SCENES = {
   TITLE: 'TitleScene',
   NIGHT_SELECT: 'NightSelectScene',
   SETTINGS: 'SettingsScene',
+  BESTIARY: 'BestiaryScene',
   NIGHT: 'NightScene',
   GAME_OVER: 'GameOverScene',
   VICTORY: 'VictoryScene',

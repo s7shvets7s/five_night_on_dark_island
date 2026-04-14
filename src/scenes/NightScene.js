@@ -435,6 +435,11 @@ export class NightScene {
         this._renderEnemyAtDoor(ctx, 'right', officeX, officeW, w, h, lightOn);
       }
     }
+
+    // Debug: force-spawn one enemy sprite at left door for visual positioning
+    if (CONFIG.DEBUG_ENEMY_AT_DOOR) {
+      this._renderDebugEnemyAtDoor(ctx, 'left', officeX, officeW, w, h);
+    }
   }
 
   _renderDoorState(ctx, side, officeX, w, h) {
@@ -505,6 +510,38 @@ export class NightScene {
     } else {
       // Light OFF — dark silhouette + noise (camera-like effect)
       this._renderEnemySilhouette(ctx, enemy, x, y, size, w, h);
+    }
+  }
+
+  /**
+   * Debug: render a static enemy sprite at door for visual positioning (no AI).
+   */
+  _renderDebugEnemyAtDoor(ctx, side, officeX, officeW, w, h) {
+    const debugEnemyId = 'millioner';
+    const debugConfig = ENEMY_CONFIG[debugEnemyId];
+
+    const doorPos = side === 'left' ? DOOR_POSITIONS_PERCENT.left : DOOR_POSITIONS_PERCENT.right;
+    const size = w * 0.035;
+
+    const x = officeX + (doorPos.x * officeW);
+    const y = (doorPos.y * h);
+
+    const spriteFilename = debugConfig?.sprites?.atDoor;
+    const spriteKey = spriteFilename ? `enemies_${spriteFilename.replace('.png', '')}` : null;
+    const sprite = spriteKey ? this._assetLoader?.getImage(spriteKey) : null;
+
+    // Debug label
+    ctx.fillStyle = 'rgba(255, 255, 0, 0.6)';
+    ctx.font = `bold ${Math.min(14, h * 0.02)}px Courier New`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(`DEBUG: ${debugConfig.name}`, x + size / 2, y - 4);
+
+    // Draw sprite
+    if (sprite && sprite.complete && sprite.naturalWidth > 0) {
+      ctx.drawImage(sprite, x, y, size, size);
+    } else {
+      this._renderDoorPlaceholder(ctx, { id: debugEnemyId, color: debugConfig.color }, x, y, size);
     }
   }
 
