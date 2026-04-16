@@ -18,6 +18,7 @@ export class HUDSystem {
     this._cameraActive = false;
     this._showCameraMap = false;
     this._glitchedCamera = null;
+    this._powerOut = false;
   }
 
   /**
@@ -31,6 +32,7 @@ export class HUDSystem {
     if (state.cameraActive !== undefined) this._cameraActive = state.cameraActive;
     if (state.showCameraMap !== undefined) this._showCameraMap = state.showCameraMap;
     if (state.glitchedCamera !== undefined) this._glitchedCamera = state.glitchedCamera;
+    if (state.powerOut !== undefined) this._powerOut = state.powerOut;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -323,17 +325,23 @@ export class HUDSystem {
     const x = (w - btnW) / 2;
     const y = h - btnH - UI.PADDING;
 
-    ctx.fillStyle = this._cameraActive ? COLORS.ACCENT_RED : COLORS.UI_BG;
+    // Disabled state when power is out
+    const disabled = this._powerOut;
+    const bgColor = disabled ? '#333333' : (this._cameraActive ? COLORS.ACCENT_RED : COLORS.UI_BG);
+    const textColor = disabled ? '#666666' : COLORS.TEXT_PRIMARY;
+    const label = disabled ? i18n.t('hudNoPower') : (this._cameraActive ? i18n.t('hudCloseCamera') : i18n.t('hudOpenCamera'));
+
+    ctx.fillStyle = bgColor;
     ctx.fillRect(x, y, btnW, btnH);
-    ctx.strokeStyle = COLORS.UI_BORDER;
+    ctx.strokeStyle = disabled ? '#444444' : COLORS.UI_BORDER;
     ctx.lineWidth = 2;
     ctx.strokeRect(x, y, btnW, btnH);
 
-    ctx.fillStyle = COLORS.TEXT_PRIMARY;
+    ctx.fillStyle = textColor;
     ctx.font = `${UI.FONT_BODY}px Courier New`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(this._cameraActive ? i18n.t('hudCloseCamera') : i18n.t('hudOpenCamera'), x + btnW / 2, y + btnH / 2);
+    ctx.fillText(label, x + btnW / 2, y + btnH / 2);
   }
 
   _drawMaskButton(ctx, w, h, maskActive, cooldown) {

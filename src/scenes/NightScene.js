@@ -56,8 +56,16 @@ export class NightScene {
     });
     this._generatorMiniGame = new GeneratorMiniGame({
       eventBus,
-      onSuccess: () => this._powerSystem.add(CONFIG.GENERATOR_SUCCESS_BONUS),
-      onFail: (reason) => this._powerSystem.drain(CONFIG.GENERATOR_FAIL_PENALTY),
+      onSuccess: () => {
+        this._powerSystem.add(CONFIG.GENERATOR_SUCCESS_BONUS);
+        if (!this._officeSystem.leftLightOn) this._officeSystem.toggleLight('left');
+        if (!this._officeSystem.rightLightOn) this._officeSystem.toggleLight('right');
+      },
+      onFail: (reason) => {
+        if (!this._powerOut) {
+          this._powerSystem.drain(CONFIG.GENERATOR_FAIL_PENALTY);
+        }
+      },
     });
 
     this._enemies = [];
@@ -81,6 +89,9 @@ export class NightScene {
     this._maskActive = false;
     this._maskOxygen = 0;
     this._maskCooldown = 0;
+    this._leftDoorCooldown = 0;
+    this._rightDoorCooldown = 0;
+    this._doorPowerOutTimers = { left: 0, right: 0 };
   }
 
   enter() {
@@ -111,6 +122,9 @@ export class NightScene {
     this._maskActive = false;
     this._maskOxygen = 0;
     this._maskCooldown = 0;
+    this._leftDoorCooldown = 0;
+    this._rightDoorCooldown = 0;
+    this._doorPowerOutTimers = { left: 0, right: 0 };
 
     this._glitchMiniGame.init(this._nightId);
 
@@ -294,6 +308,40 @@ export class NightScene {
       this._jumpscareSystem.update(dtMs);
     }
 
+    // Update door cooldowns
+    if (this._leftDoorCooldown > 0) {
+      this._leftDoorCooldown -= dt;
+      if (this._leftDoorCooldown < 0) this._leftDoorCooldown = 0;
+    }
+    if (this._rightDoorCooldown > 0) {
+      this._rightDoorCooldown -= dt;
+      if (this._rightDoorCooldown < 0) this._rightDoorCooldown = 0;
+    }
+
+    // Auto-open doors when power is out (max 1 second)
+    if (this._powerOut) {
+      const leftClosed = !this._officeSystem.leftDoorOpen;
+      const rightClosed = !this._officeSystem.rightDoorOpen;
+
+      if (leftClosed) {
+        this._doorPowerOutTimers.left += dt;
+        if (this._doorPowerOutTimers.left >= CONFIG.DOOR_POWER_OUT_MAX_DURATION) {
+          this._officeSystem.toggleDoor('left');
+          this._doorPowerOutTimers.left = 0;
+        }
+      }
+      if (rightClosed) {
+        this._doorPowerOutTimers.right += dt;
+        if (this._doorPowerOutTimers.right >= CONFIG.DOOR_POWER_OUT_MAX_DURATION) {
+          this._officeSystem.toggleDoor('right');
+          this._doorPowerOutTimers.right = 0;
+        }
+      }
+    } else {
+      this._doorPowerOutTimers.left = 0;
+      this._doorPowerOutTimers.right = 0;
+    }
+
     if (this._maskActive) {
       this._maskOxygen -= dt;
       if (this._maskOxygen <= 0) {
@@ -324,14 +372,12 @@ export class NightScene {
       return;
     }
 
-    if (this._cameraSystem.isActive) {
+    if (this._cameraSystem.isActive && !this._powerOut) {
       this._renderCameraView(ctx, w, h);
 
       if (this._glitchMiniGame.isActive && this._glitchMiniGame.glitchedCamera === this._cameraSystem.currentCamera) {
         this._glitchMiniGame.render(ctx, w, h);
       }
-    } else if (this._powerOut) {
-      this._renderPowerOut(ctx, w, h);
     } else {
       this._renderOffice(ctx, w, h);
     }
@@ -351,7 +397,7 @@ export class NightScene {
       this._hudSystem.renderCameraMap(ctx, w, h, ROOM_MAP, this._cameraSystem.currentCamera, this._enemies);
     }
 
-    this._renderDoorButtons(ctx, w, h);
+    this._renderDoorButtons(ctx, w, h, this._leftDoorCooldown, this._rightDoorCooldown);
     this._renderLightButtons(ctx, w, h);
     this._renderGeneratorButton(ctx, w, h);
 
@@ -382,10 +428,10 @@ export class NightScene {
     const leftClosed = !this._officeSystem.leftDoorOpen;
     const rightClosed = !this._officeSystem.rightDoorOpen;
 
-    if (this._officeSystem.leftLightOn) {
+    if (this._officeSystem.leftLightOn && !this._powerOut) {
       this._renderLightEffect(ctx, 'left', officeX, w, h);
     }
-    if (this._officeSystem.rightLightOn) {
+    if (this._officeSystem.rightLightOn && !this._powerOut) {
       this._renderLightEffect(ctx, 'right', officeX, w, h);
     }
 
@@ -407,6 +453,12 @@ export class NightScene {
     } else {
       ctx.fillStyle = '#222';
       ctx.fillRect(officeX, 0, officeW, h);
+    }
+
+    // Power out overlay - darken the office
+    if (this._powerOut) {
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+      ctx.fillRect(0, 0, w, h);
     }
 
     ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
@@ -626,22 +678,28 @@ export class NightScene {
     }
   }
 
-  _renderDoorButtons(ctx, w, h) {
+  _renderDoorButtons(ctx, w, h, leftCooldown, rightCooldown) {
     for (const side of ['left', 'right']) {
       const bounds = this._hudSystem.getDoorButtonBounds(side, w, h);
       const isClosed = side === 'left' ? !this._officeSystem.leftDoorOpen : !this._officeSystem.rightDoorOpen;
+      const cooldown = side === 'left' ? leftCooldown : rightCooldown;
+      const onCooldown = cooldown > 0;
 
-      ctx.fillStyle = isClosed ? COLORS.ACCENT_RED : COLORS.UI_BG;
+      const bgColor = onCooldown ? '#333333' : (isClosed ? COLORS.ACCENT_RED : COLORS.UI_BG);
+      const textColor = onCooldown ? '#666666' : COLORS.TEXT_PRIMARY;
+      const label = onCooldown ? i18n.t('hudDoorCooldown') : (isClosed ? i18n.t('hudDoor') : i18n.t('hudDoorOpen'));
+
+      ctx.fillStyle = bgColor;
       ctx.fillRect(bounds.x, bounds.y, bounds.w, bounds.h);
-      ctx.strokeStyle = COLORS.UI_BORDER;
+      ctx.strokeStyle = onCooldown ? '#444444' : COLORS.UI_BORDER;
       ctx.lineWidth = 2;
       ctx.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h);
 
-      ctx.fillStyle = COLORS.TEXT_PRIMARY;
+      ctx.fillStyle = textColor;
       ctx.font = `${UI.FONT_BODY}px Courier New`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(isClosed ? i18n.t('hudDoor') : i18n.t('hudDoorOpen'), bounds.x + bounds.w / 2, bounds.y + bounds.h / 2);
+      ctx.fillText(label, bounds.x + bounds.w / 2, bounds.y + bounds.h / 2);
     }
   }
 
@@ -798,12 +856,13 @@ export class NightScene {
       nightId: this._nightId,
       cameraActive: this._cameraSystem.isActive,
       glitchedCamera: this._glitchMiniGame.glitchedCamera,
+      powerOut: this._powerOut,
     });
   }
 
   _onPowerOut() {
     this._powerOut = true;
-    this._officeSystem.reset();
+    this._doorPowerOutTimers = { left: 0, right: 0 };
     this._cameraSystem.close();
     this._audioManager?.stopCameraStaticNoise();
     this._sfxManager?.play('powerOut');
@@ -872,9 +931,11 @@ export class NightScene {
         return;
       }
 
-      // Camera toggle
+      // Camera toggle — disallow opening camera when power is out
       const toggleBounds = this._hudSystem.getCameraToggleBounds(w, h);
       if (this._isInRect(pos, toggleBounds)) {
+        if (this._powerOut) return; // Cannot open cameras without power
+
         if (this._cameraSystem.isActive) {
           this._cameraSystem.close();
           this._audioManager?.stopCameraStaticNoise();
@@ -897,6 +958,7 @@ export class NightScene {
         if (this._maskActive) {
           this._maskActive = false;
           this._maskOxygen = 0;
+          this._maskCooldown = CONFIG.MASK_COOLDOWN;
           this._sfxManager?.play('maskOff');
         } else {
           this._maskActive = true;
@@ -910,7 +972,20 @@ export class NightScene {
       for (const side of ['left', 'right']) {
         const bounds = this._hudSystem.getDoorButtonBounds(side, w, h);
         if (this._isInRect(pos, bounds)) {
+          const doorCooldown = side === 'left' ? this._leftDoorCooldown : this._rightDoorCooldown;
+          if (doorCooldown > 0) {
+            return;
+          }
+          const wasClosed = side === 'left' ? !this._officeSystem.leftDoorOpen : !this._officeSystem.rightDoorOpen;
           this._officeSystem.toggleDoor(side);
+          const isNowOpen = side === 'left' ? this._officeSystem.leftDoorOpen : this._officeSystem.rightDoorOpen;
+          if (isNowOpen) {
+            if (side === 'left') {
+              this._leftDoorCooldown = CONFIG.DOOR_COOLDOWN;
+            } else {
+              this._rightDoorCooldown = CONFIG.DOOR_COOLDOWN;
+            }
+          }
           return;
         }
       }

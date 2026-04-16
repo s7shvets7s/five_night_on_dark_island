@@ -13,7 +13,9 @@ export const CONFIG = {
   DISABLE_ADS: false,
   GOD_MODE: false,
   MASK_DURATION: 10,
-  MASK_COOLDOWN: 30,
+  MASK_COOLDOWN: 10,
+  DOOR_COOLDOWN: 5,
+  DOOR_POWER_OUT_MAX_DURATION: 1,
   CAMERA_GLITCH_POWER_PENALTY: 4,
   GENERATOR_INTERVAL: 50,
   GENERATOR_TIMEOUT: 10,
@@ -38,7 +40,7 @@ export const POWER_DRAIN_MULTIPLIERS = {
 };
 
 /** Chance of showing ad instead of jumpscare (rare event) */
-export const RANDOM_AD_CHANCE = 0.03;
+export const RANDOM_AD_CHANCE = 0;
 
 export const CAMERA_GLITCH = {
   CHECK_INTERVAL_MIN: 3,
