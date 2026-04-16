@@ -20,17 +20,18 @@ export const MASK_REACTION = {
   ATTACK_ON_MASK: 'ATTACK_ON_MASK', // Агрессивно атакует при маске (повышенный шанс)
 };
 
-// ============================================================
+// ============================================================left: { x: 290, y: 486 },
+ 
 // DOOR CONFIG — позиции дверей в пикселях картинки фона
-// ============================================================
+// ============================================================ right: { x: 1100, y: 486 },
 export const DOOR_IMAGE_SIZE = {
   width: 1368,
   height: 768,
 };
 
 export const DOOR_POSITIONS = {
-  left: { x: 290, y: 486 },
-  right: { x: 1100, y: 486 },
+  left: { x: 200, y: 300 },
+  right: { x: 900, y: 300 },
 };
 
 export const DOOR_POSITIONS_PERCENT = {
@@ -39,7 +40,7 @@ export const DOOR_POSITIONS_PERCENT = {
 };
 
 /** Enemy sprite size at door as fraction of canvas width */
-export const DOOR_ENEMY_SIZE = 0.4;
+export const DOOR_ENEMY_SIZE = 0.3;
 
 // ============================================================
 // ENEMY CONFIG — конфиг каждого врага

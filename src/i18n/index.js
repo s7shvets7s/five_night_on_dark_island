@@ -2,6 +2,7 @@ const TRANSLATIONS = {
   ru: {
     // Main Menu
     menuPlay: 'ИГРАТЬ',
+    menuBestiary: 'ДОСЬЕ',
     menuSettings: 'НАСТРОЙКИ',
     menuExit: 'ВЫЙТИ',
 
@@ -11,6 +12,9 @@ const TRANSLATIONS = {
     nightComplete: 'ПРОЙДЕНА',
     nightN: 'Ночь {{night}}',
     nightAvailable: 'ДОСТУПНА',
+
+    // Bestiary
+    bestiaryTitle: 'ДОСЬЕ',
 
     // Settings
     settingsTitle: 'НАСТРОЙКИ',
@@ -86,6 +90,7 @@ const TRANSLATIONS = {
   en: {
     // Main Menu
     menuPlay: 'PLAY',
+    menuBestiary: 'DOSSIER',
     menuSettings: 'SETTINGS',
     menuExit: 'EXIT',
 
@@ -95,6 +100,9 @@ const TRANSLATIONS = {
     nightComplete: 'COMPLETE',
     nightN: 'Night {{night}}',
     nightAvailable: 'AVAILABLE',
+
+    // Bestiary
+    bestiaryTitle: 'DOSSIER',
 
     // Settings
     settingsTitle: 'SETTINGS',

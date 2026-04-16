@@ -162,12 +162,12 @@ export class BestiaryScene {
       ctx.restore();
 
       // Black square/shadow over the face area (upper half of sprite)
-      const faceH = spriteSize * 0.35;
-      const faceY = spriteY + spriteSize * 0.12;
+      const faceH = spriteSize * 0.3;
+      const faceY = spriteY + spriteSize * 0.05;
       const faceX = spriteX + spriteSize * 0.15;
       const faceW = spriteSize * 0.7;
 
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+      ctx.fillStyle = 'rgba(0, 0, 0, 1)';
       ctx.fillRect(faceX, faceY, faceW, faceH);
 
       // Subtle vignette around face block

@@ -83,6 +83,7 @@ export class TitleScene {
 
     const labels = [
       i18n.t('menuPlay'),
+      i18n.t('menuBestiary'),
       i18n.t('menuSettings'),
       i18n.t('menuExit'),
     ];
@@ -135,6 +136,8 @@ export class TitleScene {
     this._sfxManager?.play('buttonClick');
     if (label === i18n.t('menuPlay')) {
       this._onSceneChange(SCENES.NIGHT_SELECT);
+    } else if (label === i18n.t('menuBestiary')) {
+      this._onSceneChange(SCENES.BESTIARY);
     } else if (label === i18n.t('menuSettings')) {
       this._onSceneChange(SCENES.SETTINGS);
     } else if (label === i18n.t('menuExit')) {

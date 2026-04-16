@@ -137,7 +137,7 @@ export const gameState = {
   _completedNights: new Set(),
   _volume: 0.7,
   _sfxVolume: 0.8,
-  _musicVolume: 0.5,
+  _musicVolume: 0.2,
   _locale: 'ru',
 
   getUnlockedNight() {
