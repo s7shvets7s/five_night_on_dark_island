@@ -10,9 +10,13 @@ const SAVE_KEY = 'island_night_watch_save';
 export class SaveSystem {
   /**
    * @param {Object} player - YandexPlayer instance
+   * @param {Object} [audioManager] - AudioManager instance
+   * @param {Object} [sfxManager] - SFXManager instance
    */
-  constructor(player) {
+  constructor(player, audioManager = null, sfxManager = null) {
     this._player = player;
+    this._audioManager = audioManager;
+    this._sfxManager = sfxManager;
     this._saveData = {
       unlockedNight: 1,
       completedNights: [],
@@ -69,15 +73,21 @@ export class SaveSystem {
 
     this._syncFromGameState();
 
+    if (this._audioManager) this._audioManager.pauseAll();
+    if (this._sfxManager) this._sfxManager.mute();
+
     try {
       await this._player.save({ [SAVE_KEY]: this._saveData });
       this._dirty = false;
       console.log('[SaveSystem] Saved:', this._saveData);
-      return true;
     } catch (e) {
       console.warn('[SaveSystem] Save failed:', e);
-      return false;
     }
+
+    if (this._audioManager) this._audioManager.resumeAll();
+    if (this._sfxManager) this._sfxManager.unmute();
+
+    return true;
   }
 
   /** Update auto-save timer. Call every frame from game loop. */

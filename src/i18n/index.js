@@ -83,11 +83,66 @@ const TRANSLATIONS = {
     bootSubtitle: 'Опыт выживания в ужасе',
 
     // Title
+    gameTitle: '5 НОЧЕЙ НА ЗАГАДОЧНОМ ОСТРОВЕ',
     titleSubtitle: 'Опыт выживания в ужасе',
     titleClickStart: 'НАЖМИ ЧТОБЫ НАЧАТЬ',
+    license: '© 2026 Все права защищены',
+    musicCredits: 'Музыка: Retro Indie Josh (CC BY 4.0)',
 
     // General
     clickToContinue: 'Нажми чтобы продолжить',
+
+    // Time
+    time12: '00:00',
+    timeHour: '{{hour}}:00',
+
+    // Camera
+    cameraLabel: 'КАМЕРА',
+
+    // Mini-games
+    cameraMalfunction: 'НЕИСПРАВНОСТЬ КАМЕРЫ',
+    glitchAscending: 'Нажимай числа по возрастанию',
+    glitchDescending: 'Нажимай числа по убыванию',
+
+    // Jumpscare
+    jumpscareTitle: 'ТЫ МЁРТВ',
+
+    // Game
+    gameSubtitle: 'Опыт выживания в ужасе',
+    nightName1: 'Ночь 1',
+    nightName2: 'Ночь 2',
+    nightName3: 'Ночь 3',
+    nightName4: 'Ночь 4',
+    nightName5: 'Ночь 5',
+    nightName6: 'Ночь 6',
+    nightName7: 'Ночь 7',
+
+    // Enemy names
+    enemyMillioner: 'Миллионер',
+    enemyPresident: 'Президент',
+    enemySince: 'Страж',
+    enemyFake_millioner: 'Двойник',
+    enemyMicro: 'Бизнесмен',
+    enemyDancer: 'Танцор',
+
+    // Mini-game
+    generatorMinigame: 'ГЕНЕРАТОР',
+    generatorInstructions: 'Крути ручку по часовой стрелке',
+
+    // Room names
+    roomhelipad: 'Вертушка',
+    roomgoldentemple: 'Золотой храм',
+    roomstaffquarters: 'Жилой блок',
+    roomguesthouse: 'Гостевой дом',
+    roomgreenhouse: 'Оранжерея',
+    roombeachhouse: 'Пляжный дом',
+    roomdock: 'Причал',
+    roomgenerator: 'Генераторная',
+    roompool: 'Бассейн',
+    roomtunnel: 'Туннель',
+    roombunker: 'Бункер',
+    roomcentralstreet: 'Центральная улица',
+    roomoffice: 'Охранная комната',
   },
   en: {
     // Main Menu
@@ -139,7 +194,7 @@ const TRANSLATIONS = {
     hudGeneratorStart: 'START',
 
     // Camera Map
-    camerasLabel: 'CAMERAS',
+    camerasLabel: 'КАМЕРЫ',
     officeLabel: 'OFFICE',
 
     // Oxygen
@@ -173,11 +228,68 @@ const TRANSLATIONS = {
     bootSubtitle: 'A survival horror experience',
 
     // Title
+    gameTitle: '5 NIGHTS ON A MYSTERIOUS ISLAND',
     titleSubtitle: 'A survival horror experience',
     titleClickStart: 'CLICK OR PRESS ENTER TO START',
+    license: '© 2026 All Rights Reserved',
+    musicCredits: 'Music: Retro Indie Josh (CC BY 4.0)',
 
     // General
     clickToContinue: 'Click to continue',
+
+    // Time
+    time12: '12AM',
+    timeHour: '{{hour}}AM',
+
+    // Camera
+    cameraLabel: 'CAMERA',
+
+    // Mini-games
+    cameraMalfunction: 'CAMERA MALFUNCTION',
+    glitchAscending: 'Click numbers in ASCENDING order',
+    glitchDescending: 'Click numbers in DESCENDING order',
+
+    // Jumpscare
+    jumpscareTitle: 'YOU DIED',
+
+    // Game
+    gameSubtitle: 'A survival horror experience',
+
+    // Night names
+    nightName1: 'Night 1',
+    nightName2: 'Night 2',
+    nightName3: 'Night 3',
+    nightName4: 'Night 4',
+    nightName5: 'Night 5',
+    nightName6: 'Night 6',
+    nightName7: 'Night 7',
+
+    // Enemy names
+    enemyMillioner: 'Millioner',
+    enemyPresident: 'President',
+    enemySince: 'Sentinel',
+    enemyFake_millioner: 'Double',
+    enemyMicro: 'Businessman',
+    enemyDancer: 'Dancer',
+
+    // Mini-game
+    generatorMinigame: 'GENERATOR',
+    generatorInstructions: 'Turn the handle clockwise',
+
+    // Room names
+    roomhelipad: 'Helipad',
+    roomgoldentemple: 'Golden Temple',
+    roomstaffquarters: 'Staff Quarters',
+    roomguesthouse: 'Guest House',
+    roomgreenhouse: 'Greenhouse',
+    roombeachhouse: 'Beach House',
+    roomdock: 'Dock',
+    roomgenerator: 'Generator Room',
+    roompool: 'Pool',
+    roomtunnel: 'Tunnel',
+    roombunker: 'Bunker',
+    roomcentralstreet: 'Central Street',
+    roomoffice: 'Security Office',
   },
 };
 

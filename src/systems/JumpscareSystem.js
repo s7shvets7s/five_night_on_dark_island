@@ -1,8 +1,8 @@
 /**
  * JumpscareSystem — handles jumpscare triggers and animation.
- * Renders enemy attack sprite with screen shake and flash effects.
  */
 import { ENEMY_CONFIG } from '../config/enemyConfig.js';
+import { i18n } from '../i18n/index.js';
 
 export class JumpscareSystem {
   /**
@@ -87,7 +87,10 @@ export class JumpscareSystem {
     ctx.font = 'bold 36px Courier New';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'bottom';
-    ctx.fillText(this._currentEnemy.name || '', cx, h - 30);
+    const enemyId = this._currentEnemy?.id || '';
+    const enemyNameKey = 'enemy' + enemyId.charAt(0).toUpperCase() + enemyId.slice(1);
+    const enemyDisplayName = i18n.t(enemyNameKey) || this._currentEnemy?.name || '';
+    ctx.fillText(enemyDisplayName, cx, h - 30);
 
     // Vignette overlay for horror effect
     const maxDim = Math.max(w, h);

@@ -1,19 +1,29 @@
-import { SCENES, COLORS, UI, GAME_TITLE, GAME_VERSION, gameState } from '../config/gameConfig.js';
+import { SCENES, COLORS, UI, GAME_VERSION, gameState } from '../config/gameConfig.js';
 import { i18n } from '../i18n/index.js';
 import { eventBus } from '../engine/EventBus.js';
 
 export class TitleScene {
-  constructor({ onSceneChange, inputManager, audioManager, sfxManager }) {
+  constructor({ onSceneChange, inputManager, audioManager, sfxManager, assetLoader }) {
     this._onSceneChange = onSceneChange;
     this._inputManager = inputManager;
     this._audioManager = audioManager;
     this._sfxManager = sfxManager;
+    this._assetLoader = assetLoader;
     this._buttons = [];
     this._pulsePhase = 0;
+    this._zoom = 1.0;
+    this._zoomDir = 1;
+    this._zoomSpeed = 0.15;
+    this._glitchTimer = 0;
+    this._glitchIntensity = 0;
   }
 
   enter() {
     this._pulsePhase = 0;
+    this._zoom = 1.0;
+    this._zoomDir = 1;
+    this._glitchTimer = 0;
+    this._glitchIntensity = 0;
     this._bindInput();
   }
 
@@ -23,6 +33,22 @@ export class TitleScene {
 
   update(dt) {
     this._pulsePhase += dt * 2;
+    this._zoom += this._zoomDir * this._zoomSpeed * dt;
+    if (this._zoom >= 1.25) {
+      this._zoom = 1.25;
+      this._zoomDir = -1;
+    } else if (this._zoom <= 1.0) {
+      this._zoom = 1.0;
+      this._zoomDir = 1;
+    }
+    this._glitchTimer += dt;
+    if (this._glitchTimer > 0.3 + Math.random() * 0.5) {
+      this._glitchTimer = 0;
+      this._glitchIntensity = 1.0;
+    }
+    if (this._glitchIntensity > 0) {
+      this._glitchIntensity -= dt * 0.15;
+    }
   }
 
   render(ctx, w, h) {
@@ -30,8 +56,27 @@ export class TitleScene {
     const fh = Number(h);
     if (!isFinite(fw) || !isFinite(fh) || fw < 1 || fh < 1) return;
 
-    ctx.fillStyle = '#0a0a0a';
-    ctx.fillRect(0, 0, fw, fh);
+    const bgImage = this._assetLoader?.getImage('menusbackground');
+
+    if (bgImage) {
+      ctx.save();
+      const cx = fw / 2;
+      const cy = fh / 2;
+      ctx.translate(cx, cy);
+      ctx.scale(this._zoom, this._zoom);
+      ctx.translate(-cx, -cy);
+
+      const scale = Math.max(fw / bgImage.width, fh / bgImage.height);
+      const bw = bgImage.width * scale;
+      const bh = bgImage.height * scale;
+      const bx = (fw - bw) / 2;
+      const by = (fh - bh) / 2;
+      ctx.drawImage(bgImage, bx, by, bw, bh);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(0, 0, fw, fh);
+    }
 
     const maxDim = Math.max(fw, fh);
     const vignette = ctx.createRadialGradient(fw / 2, fh / 2, maxDim * 0.2, fw / 2, fh / 2, maxDim * 0.8);
@@ -40,12 +85,16 @@ export class TitleScene {
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, fw, fh);
 
+    if (this._glitchIntensity > 0) {
+      this._drawGlitch(ctx, fw, fh);
+    }
+
     const fontSizeTitle = Math.min(48, h * 0.067);
     ctx.fillStyle = '#8b0000';
     ctx.font = `bold ${fontSizeTitle}px Courier New`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(GAME_TITLE, w / 2, h * 0.25);
+    ctx.fillText(i18n.t('gameTitle'), w / 2, h * 0.25);
 
     const fontSizeSub = Math.min(14, h * 0.019);
     ctx.fillStyle = '#555';
@@ -63,11 +112,15 @@ export class TitleScene {
     const fontSizeVer = Math.min(11, h * 0.015);
     ctx.fillStyle = '#333';
     ctx.font = `${fontSizeVer}px Courier New`;
-    ctx.fillText(`v${GAME_VERSION}`, w / 2, h * 0.92);
+    ctx.fillText(`${GAME_VERSION}`, w / 2, h * 0.92);
+
+    ctx.fillStyle = '#333';
+    ctx.font = `${Math.max(9, h * 0.012)}px Courier New`;
+    ctx.fillText(i18n.t('license'), w / 2, h * 0.95);
 
     ctx.fillStyle = '#2a2a2a';
-    ctx.font = `${Math.max(9, h * 0.012)}px Courier New`;
-    ctx.fillText('Music: Retro Indie Josh (CC BY 4.0)', w / 2, h * 0.96);
+    ctx.font = `${Math.max(8, h * 0.01)}px Courier New`;
+    ctx.fillText(i18n.t('musicCredits'), w / 2, h * 0.99);
 
     this._drawScanlines(ctx, w, h);
   }
@@ -111,6 +164,23 @@ export class TitleScene {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.04)';
     for (let y = 0; y < h; y += spacing) {
       ctx.fillRect(0, y, w, 1);
+    }
+  }
+
+  _drawGlitch(ctx, w, h) {
+    const intensity = Math.max(0, this._glitchIntensity);
+    if (intensity <= 0) return;
+
+    const noiseMultiplier = intensity;
+
+    if (Math.random() < 0.5 * noiseMultiplier) {
+      const numLines = Math.floor(Math.random() * 10 * noiseMultiplier + 4);
+      for (let i = 0; i < numLines; i++) {
+        const ny = Math.random() * h;
+        const nh = Math.random() * 8 + 3;
+        ctx.fillStyle = `rgba(180, 180, 180, ${Math.random() * 0.3 * noiseMultiplier})`;
+        ctx.fillRect(0, ny, w, nh);
+      }
     }
   }
 

@@ -4,6 +4,7 @@
 import { Renderer } from '../engine/Renderer.js';
 import { ENEMY_CONFIG, ENEMY_STATES } from '../config/enemyConfig.js';
 import { CONFIG } from '../config/gameConfig.js';
+import { i18n } from '../i18n/index.js';
 
 export class CameraSystem {
   /**
@@ -121,7 +122,10 @@ export class CameraSystem {
     ctx.font = 'bold 20px Courier New';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    ctx.fillText(`CAM: ${room?.name || cameraId}`, 20, 20);
+    const cameraLabel = i18n.t('cameraLabel');
+    const roomNameKey = 'room' + room.id.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('').toLowerCase();
+    const roomDisplayName = i18n.t(roomNameKey) || room.name;
+    ctx.fillText(`${cameraLabel}: ${roomDisplayName}`, 20, 20);
 
     const enemyCount = enemies ? enemies.filter(e => e.currentRoom === cameraId).length : 0;
     this._drawStatic(ctx, w, h, enemyCount);
@@ -173,14 +177,17 @@ export class CameraSystem {
     ctx.font = '14px Courier New';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(room.name, cx, cy);
+    const roomNameKey = 'room' + room.id.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('').toLowerCase();
+    const roomName = i18n.t(roomNameKey) || room.name;
+    ctx.fillText(roomName, cx, cy);
 
     const connections = room.connections || [];
     ctx.fillStyle = '#2a3a2a';
     ctx.font = '11px Courier New';
     connections.forEach((connId, i) => {
       const connRoom = allRooms?.[connId];
-      const label = connRoom ? connRoom.name : connId;
+      const connKey = 'room' + connId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('').toLowerCase();
+      const label = connRoom ? (i18n.t(connKey) || connRoom.name) : connId;
       ctx.fillText(`→ ${label}`, cx, cy + 25 + i * 16);
     });
   }

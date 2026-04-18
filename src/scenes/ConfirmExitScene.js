@@ -2,9 +2,10 @@ import { SCENES, COLORS, UI } from '../config/gameConfig.js';
 import { i18n } from '../i18n/index.js';
 
 export class ConfirmExitScene {
-  constructor({ onSceneChange, inputManager }) {
+  constructor({ onSceneChange, inputManager, yandexSDK }) {
     this._onSceneChange = onSceneChange;
     this._inputManager = inputManager;
+    this._yandexSDK = yandexSDK;
     this._buttons = [];
   }
 
@@ -116,7 +117,16 @@ export class ConfirmExitScene {
 
   _handleAction(action) {
     if (action === 'yes') {
+      // Dispatch EXIT event to Yandex SDK (for TV)
+      if (this._yandexSDK?.isAvailable && this._yandexSDK.sdk?.EVENTS) {
+        this._yandexSDK.dispatchEvent(this._yandexSDK.sdk.EVENTS.EXIT);
+      }
+      // Try to close the window
       window.close();
+      // If window.close() didn't work, try opening Yandex Games home
+      if (!window.closed) {
+        window.location.href = 'https://yandex.ru/games/';
+      }
     } else if (action === 'no') {
       this._onSceneChange(SCENES.TITLE);
     }

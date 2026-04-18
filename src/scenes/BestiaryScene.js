@@ -15,9 +15,18 @@ export class BestiaryScene {
     this._sfxManager = sfxManager;
     this._buttons = [];
     this._selectedEnemy = null;
+    this._zoom = 1.0;
+    this._zoomDir = 1;
+    this._zoomSpeed = 0.15;
+    this._glitchTimer = 0;
+    this._glitchIntensity = 0;
   }
 
   enter() {
+    this._zoom = 1.0;
+    this._zoomDir = 1;
+    this._glitchTimer = 0;
+    this._glitchIntensity = 0;
     this._bindInput();
   }
 
@@ -25,7 +34,24 @@ export class BestiaryScene {
     this._inputManager.clearAll();
   }
 
-  update(dt) {}
+  update(dt) {
+    this._zoom += this._zoomDir * this._zoomSpeed * dt;
+    if (this._zoom >= 1.25) {
+      this._zoom = 1.25;
+      this._zoomDir = -1;
+    } else if (this._zoom <= 1.0) {
+      this._zoom = 1.0;
+      this._zoomDir = 1;
+    }
+    this._glitchTimer += dt;
+    if (this._glitchTimer > 0.3 + Math.random() * 0.5) {
+      this._glitchTimer = 0;
+      this._glitchIntensity = 1.0;
+    }
+    if (this._glitchIntensity > 0) {
+      this._glitchIntensity -= dt * 0.15;
+    }
+  }
 
   render(ctx, w, h) {
     const fw = Number(w);
@@ -34,8 +60,31 @@ export class BestiaryScene {
 
     this._buttons = [];
 
-    ctx.fillStyle = '#0a0a0a';
-    ctx.fillRect(0, 0, fw, fh);
+    const bgImage = this._assetLoader?.getImage('menusbackground');
+
+    if (bgImage) {
+      ctx.save();
+      const cx = fw / 2;
+      const cy = fh / 2;
+      ctx.translate(cx, cy);
+      ctx.scale(this._zoom, this._zoom);
+      ctx.translate(-cx, -cy);
+
+      const scale = Math.max(fw / bgImage.width, fh / bgImage.height);
+      const bw = bgImage.width * scale;
+      const bh = bgImage.height * scale;
+      const bx = (fw - bw) / 2;
+      const by = (fh - bh) / 2;
+      ctx.drawImage(bgImage, bx, by, bw, bh);
+      ctx.restore();
+
+      if (this._glitchIntensity > 0) {
+        this._drawGlitch(ctx, fw, fh);
+      }
+    } else {
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(0, 0, fw, fh);
+    }
 
     const maxDim = Math.max(fw, fh);
     const vignette = ctx.createRadialGradient(fw / 2, fh / 2, maxDim * 0.2, fw / 2, fh / 2, maxDim * 0.8);
@@ -43,6 +92,10 @@ export class BestiaryScene {
     vignette.addColorStop(1, 'rgba(0, 0, 0, 0.7)');
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, fw, fh);
+
+    if (this._glitchIntensity > 0) {
+      this._drawGlitch(ctx, fw, fh);
+    }
 
     // Title
     ctx.fillStyle = COLORS.ACCENT_RED;
@@ -102,7 +155,8 @@ export class BestiaryScene {
       ctx.font = `bold ${Math.min(18, h * 0.025)}px Courier New`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(config.name, listX + listW / 2, btnY + btnH / 2);
+      const enemyName = i18n.t(`enemy${config.id.charAt(0).toUpperCase() + config.id.slice(1)}`);
+      ctx.fillText(enemyName, listX + listW / 2, btnY + btnH / 2);
     });
   }
 
@@ -134,7 +188,8 @@ export class BestiaryScene {
     ctx.font = `bold ${Math.min(28, h * 0.04)}px Courier New`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(config.name, detailX + detailW / 2, detailY + 30);
+    const enemyName = i18n.t(`enemy${config.id.charAt(0).toUpperCase() + config.id.slice(1)}`);
+    ctx.fillText(enemyName, detailX + detailW / 2, detailY + 30);
 
     const spriteSize = Math.min(180, w * 0.15, h * 0.28);
     const spriteX = detailX + 40;
@@ -189,7 +244,8 @@ export class BestiaryScene {
       ctx.font = `bold ${Math.min(14, spriteSize * 0.08)}px Courier New`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(config.name, spriteX + spriteSize / 2, spriteY + spriteSize / 2);
+      const enemyName = i18n.t(`enemy${config.id.charAt(0).toUpperCase() + config.id.slice(1)}`);
+      ctx.fillText(enemyName, spriteX + spriteSize / 2, spriteY + spriteSize / 2);
     }
 
     // Fear indicators (right of sprite)
@@ -312,5 +368,22 @@ export class BestiaryScene {
         }
       }
     });
+  }
+
+  _drawGlitch(ctx, w, h) {
+    const intensity = Math.max(0, this._glitchIntensity);
+    if (intensity <= 0) return;
+
+    const noiseMultiplier = intensity;
+
+    if (Math.random() < 0.5 * noiseMultiplier) {
+      const numLines = Math.floor(Math.random() * 10 * noiseMultiplier + 4);
+      for (let i = 0; i < numLines; i++) {
+        const ny = Math.random() * h;
+        const nh = Math.random() * 8 + 3;
+        ctx.fillStyle = `rgba(180, 180, 180, ${Math.random() * 0.3 * noiseMultiplier})`;
+        ctx.fillRect(0, ny, w, nh);
+      }
+    }
   }
 }

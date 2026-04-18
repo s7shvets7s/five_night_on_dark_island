@@ -67,7 +67,7 @@ export const CAMERA_GLITCH = {
 
 /** Game identity */
 export const GAME_TITLE = 'Island Night Watch';
-export const GAME_VERSION = '0.1.0';
+export const GAME_VERSION = '1.0.0';
 
 /** Base resolution — used as reference for proportional UI scaling */
 export const BASE_WIDTH = 1280;

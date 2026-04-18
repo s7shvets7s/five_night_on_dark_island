@@ -156,6 +156,7 @@ export class NightScene {
   exit() {
     this._unbindSFX();
     this._audioManager?.stopAll();
+    this._audioManager?.stopCameraStaticNoise();
     this._inputManager.clearAll();
   }
 

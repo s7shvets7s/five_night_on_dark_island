@@ -22,6 +22,7 @@ export class AudioManager {
     this._playlist = [];
     this._playlistIndex = 0;
     this._currentMusic = null;
+    this._musicWasPlaying = false;
   }
 
   /** Initialize Web Audio context (call on first user interaction) */
@@ -333,6 +334,44 @@ export class AudioManager {
       }
       this._ctx = null;
       this._initialized = false;
+    }
+  }
+
+  /**
+   * Pause all audio (used when tab is hidden).
+   */
+  pauseAll() {
+    if (this._ctx && this._ctx.state === 'running') {
+      this._ctx.suspend().catch(() => {});
+    }
+
+    if (this._currentMusic && !this._currentMusic.paused) {
+      this._currentMusic.pause();
+      this._musicWasPlaying = true;
+    }
+
+    for (const audio of this._activeLoops.values()) {
+      if (!audio.paused) {
+        audio.pause();
+      }
+    }
+  }
+
+  /**
+   * Resume all audio (used when tab becomes visible).
+   */
+  resumeAll() {
+    if (this._ctx && this._ctx.state === 'suspended') {
+      this._ctx.resume().catch(() => {});
+    }
+
+    if (this._musicWasPlaying && this._currentMusic) {
+      this._currentMusic.play().catch(() => {});
+      this._musicWasPlaying = false;
+    }
+
+    for (const audio of this._activeLoops.values()) {
+      audio.play().catch(() => {});
     }
   }
 }

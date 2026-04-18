@@ -3,7 +3,7 @@
  */
 export class YandexLeaderboard {
   /**
-   * @param {Object} sdk - YandexSDK instance
+   * @param {Object} sdk - YandexSDK instance (the sdk property, not wrapper)
    */
   constructor(sdk) {
     this._sdk = sdk;
@@ -15,9 +15,9 @@ export class YandexLeaderboard {
    * @param {number} score - Score value
    */
   async submit(leaderboardName, score) {
-    if (this._sdk?.leaderboard) {
+    if (this._sdk?.leaderboards) {
       try {
-        await this._sdk.leaderboard.setLeaderboardScore(leaderboardName, score);
+        await this._sdk.leaderboards.setScore(leaderboardName, score);
         return true;
       } catch (e) { /* fallback */ }
     }
@@ -31,9 +31,9 @@ export class YandexLeaderboard {
    * @returns {Array} Top entries
    */
   async getTop(leaderboardName, count = 10) {
-    if (this._sdk?.leaderboard) {
+    if (this._sdk?.leaderboards) {
       try {
-        const result = await this._sdk.leaderboard.getLeaderboardEntries(leaderboardName, { quantityTop: count });
+        const result = await this._sdk.leaderboards.getEntries(leaderboardName, { quantityTop: count });
         return result?.entries || [];
       } catch (e) { /* fallback */ }
     }

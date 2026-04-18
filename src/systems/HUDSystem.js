@@ -13,12 +13,18 @@ export class HUDSystem {
   constructor({ eventBus }) {
     this._eventBus = eventBus;
     this._powerPercent = 100;
-    this._currentTime = '12 AM';
+    this._currentHour = 0;
+    this._currentTime = i18n.t('time12');
     this._nightId = 1;
     this._cameraActive = false;
     this._showCameraMap = false;
     this._glitchedCamera = null;
     this._powerOut = false;
+
+    this._onI18nChange = () => {
+      this._currentTime = this._currentHour === 0 ? i18n.t('time12') : i18n.t('timeHour', { hour: this._currentHour });
+    };
+    i18n.onChange(this._onI18nChange);
   }
 
   /**
@@ -27,7 +33,11 @@ export class HUDSystem {
    */
   updateState(state) {
     if (state.powerPercent !== undefined) this._powerPercent = state.powerPercent;
-    if (state.currentTime !== undefined) this._currentTime = state.currentTime;
+    if (state.currentTime !== undefined) {
+      this._currentTime = state.currentTime;
+      const match = state.currentTime.match(/^(\d+)/);
+      if (match) this._currentHour = parseInt(match[1], 10);
+    }
     if (state.nightId !== undefined) this._nightId = state.nightId;
     if (state.cameraActive !== undefined) this._cameraActive = state.cameraActive;
     if (state.showCameraMap !== undefined) this._showCameraMap = state.showCameraMap;
@@ -262,14 +272,16 @@ export class HUDSystem {
       ctx.textAlign = 'center';
       ctx.textBaseline = 'top';
 
-      const words = room.name.split(' ');
+      const roomNameKey = `room${room.id.replace('_', '').toLowerCase()}`;
+      const roomDisplayName = i18n.t(roomNameKey) || room.name;
+      const words = roomDisplayName.split(' ');
       const lineH = 10;
       const labelY = cy + nodeR + 3;
       if (words.length > 1) {
         ctx.fillText(words[0], cx, labelY);
         ctx.fillText(words.slice(1).join(' '), cx, labelY + lineH);
       } else {
-        ctx.fillText(room.name, cx, labelY);
+        ctx.fillText(roomDisplayName, cx, labelY);
       }
     }
   }

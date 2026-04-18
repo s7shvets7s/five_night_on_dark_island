@@ -1,5 +1,5 @@
 import { Game } from './engine/Game.js';
-import { SCENES, GAME_TITLE, GAME_VERSION } from './config/gameConfig.js';
+import { SCENES, GAME_VERSION } from './config/gameConfig.js';
 import { BootScene } from './scenes/BootScene.js';
 import { TitleScene } from './scenes/TitleScene.js';
 import { NightSelectScene } from './scenes/NightSelectScene.js';
@@ -22,6 +22,27 @@ import { YandexPlayer } from './yandex/YandexPlayer.js';
 import { SaveSystem } from './system/SaveSystem.js';
 
 /**
+ * Wait for Yandex SDK to load before initializing.
+ * SDK loads asynchronously via iframe, so we need to poll for it.
+ * @returns {Promise<boolean>} True if SDK loaded, false on timeout
+ */
+async function waitForYaGames(timeout = 15000) {
+  const start = Date.now();
+  console.log('[Bootstrap] Waiting for YaGames SDK...');
+  
+  while (!window.YaGames) {
+    if (Date.now() - start > timeout) {
+      console.warn('[Bootstrap] YaGames SDK timeout - using mock');
+      return false;
+    }
+    await new Promise(r => setTimeout(r, 100));
+  }
+  
+  console.log('[Bootstrap] YaGames SDK detected');
+  return true;
+}
+
+/**
  * Application bootstrap.
  * Creates the Game instance, registers scenes, and starts the loop.
  */
@@ -35,6 +56,9 @@ async function bootstrap() {
   // Force landscape orientation on mobile devices
   await lockOrientation();
 
+  // Wait for Yandex SDK to load (it loads asynchronously via iframe)
+  await waitForYaGames();
+
   // Initialize Yandex SDK first
   await yandexSDK.init();
 
@@ -46,7 +70,7 @@ async function bootstrap() {
 
   // Initialize Yandex player and save system
   const player = new YandexPlayer(yandexSDK);
-  const saveSystem = new SaveSystem(player);
+  const saveSystem = new SaveSystem(player, audioManager, sfxManager);
   await saveSystem.load();
 
   // Auto-detect language from SDK if available
@@ -66,12 +90,13 @@ async function bootstrap() {
   audioManager.setMasterSFXVolume(gameState.getSFXVolume());
 
   // Setup SDK pause/resume handling
-  setupSdkPauseHandling(game, audioManager);
+  setupSdkPauseHandling(game, audioManager, sfxManager);
 
   // Initialize Yandex ads
-  const ads = new YandexAds(yandexSDK);
+  const ads = new YandexAds(yandexSDK, audioManager, sfxManager, yandexSDK);
 
   const imageManifest = {
+    menusbackground: 'scenes/menusbackground.png',
     cameras_helipad: 'cameras/helipad.png',
     cameras_golden_temple: 'cameras/golden_temple.png',
     cameras_staff_quarters: 'cameras/staff_quarters.png',
@@ -120,13 +145,20 @@ async function bootstrap() {
 
   const sceneDeps = {
     onSceneChange: (name) => game.sceneManager.change(name),
-    onPause: () => game.sceneManager.push(SCENES.PAUSE),
-    onResume: () => game.sceneManager.pop(),
+    onPause: () => {
+      yandexSDK.gameplayStop();
+      game.sceneManager.push(SCENES.PAUSE);
+    },
+    onResume: () => {
+      yandexSDK.gameplayStart();
+      game.sceneManager.pop();
+    },
     inputManager: game.inputManager,
     audioManager,
     sfxManager,
     assetLoader: game.assetLoader,
     ads,
+    yandexSDK,
   };
 
   game.registerScene(SCENES.BOOT, new BootScene(sceneDeps));
@@ -162,7 +194,7 @@ async function bootstrap() {
     console.log('[Bootstrap] Assets load error (using placeholders)');
   }
 
-  const musicTracks = [
+const musicTracks = [
     'assets/audio/music/toybox.ogg',
     'assets/audio/music/smallheart.ogg',
     'assets/audio/music/monster.ogg',
@@ -171,13 +203,30 @@ async function bootstrap() {
   ];
   audioManager.setPlaylist(musicTracks);
 
-  document.addEventListener('click', () => {
-    audioManager.init();
-    audioManager.playMusic();
-  }, { once: true });
+  // Start music on first user interaction
+  let firstInteraction = true;
+  const startMusic = () => {
+    if (firstInteraction) {
+      firstInteraction = false;
+      audioManager.init();
+      audioManager.playMusic();
+      if (window._gameStarted) {
+        window._gameStarted.started = true;
+      }
+    }
+  };
+  document.addEventListener('click', startMusic, { once: true });
+  document.addEventListener('touchstart', startMusic, { once: true });
 
   game.start();
-  console.log(`[Bootstrap] ${GAME_TITLE} v${GAME_VERSION} started`);
+  console.log(`[Bootstrap] ${i18n.t('gameTitle')} v${GAME_VERSION} started`);
+
+  // Subscribe to TV back button (HISTORY_BACK) - shows exit confirmation
+  if (yandexSDK.isAvailable && yandexSDK.sdk?.EVENTS) {
+    yandexSDK.on(yandexSDK.sdk.EVENTS.HISTORY_BACK, () => {
+      game.sceneManager.push(SCENES.CONFIRM_EXIT);
+    });
+  }
 
   // Signal to Yandex that the game is ready to play
   yandexSDK.ready();
@@ -191,35 +240,54 @@ async function bootstrap() {
 
 /**
  * Setup SDK pause/resume event handlers.
- * Stops audio and gameplay when app is minimized.
+ * Pauses audio and gameplay when app is minimized.
+ * Handles startup ad and SDK events properly.
+ * Follows Yandex SDK requirements for gameplay markup.
  */
-function setupSdkPauseHandling(game, audioManager) {
-  // Handle browser visibility change (works everywhere)
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      audioManager?.stopAll();
-      yandexSDK.gameplayStop();
-      console.log('[Bootstrap] App minimized — paused');
-    } else {
+function setupSdkPauseHandling(game, audioManager, sfxManager) {
+  let gameStarted = false;
+  let isPaused = false;
+
+  const doPause = () => {
+    if (isPaused) return;
+    isPaused = true;
+    audioManager?.pauseAll();
+    sfxManager?.mute();
+    yandexSDK.gameplayStop();
+  };
+
+  const doResume = () => {
+    if (!isPaused) return;
+    isPaused = false;
+    if (gameStarted) {
       yandexSDK.gameplayStart();
-      audioManager?.playMusic();
-      console.log('[Bootstrap] App restored — resumed');
+    }
+    audioManager?.resumeAll();
+    sfxManager?.unmute();
+  };
+
+  // Mark game as started when entering gameplay
+  yandexSDK.on('gameplayStarted', () => {
+    gameStarted = true;
+  });
+
+  // 1. Visibility API — основной способ (сработает при сворачивании/переключении вкладок)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden' || document.hidden) {
+      doPause();
+    } else {
+      doResume();
     }
   });
 
-  // Handle Yandex SDK pause/resume events
-  if (yandexSDK.isAvailable) {
-    window.addEventListener('game_api_pause', () => {
-      audioManager?.stopAll();
-      yandexSDK.gameplayStop();
-      console.log('[Bootstrap] SDK pause event');
-    });
+  // 2. Window blur/focus — дополнительный способ (сработает при клике вне окна)
+  window.addEventListener('blur', doPause);
+  window.addEventListener('focus', doResume);
 
-    window.addEventListener('game_api_resume', () => {
-      yandexSDK.gameplayStart();
-      audioManager?.playMusic();
-      console.log('[Bootstrap] SDK resume event');
-    });
+  // 3. Yandex SDK events
+  if (yandexSDK.isAvailable && yandexSDK.sdk) {
+    yandexSDK.on('game_api_pause', doPause);
+    yandexSDK.on('game_api_resume', doResume);
   }
 }
 

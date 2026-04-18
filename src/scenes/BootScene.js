@@ -16,12 +16,16 @@ export class BootScene {
     this._loadDuration = 2000; // ms
     this._elapsed = 0;
     this._done = false;
+    this._glitchTimer = 0;
+    this._glitchIntensity = 0;
   }
 
   /** Called when scene becomes active */
   enter() {
     this._elapsed = 0;
     this._done = false;
+    this._glitchTimer = 0;
+    this._glitchIntensity = 0;
   }
 
   /** Called when scene is deactivated */
@@ -42,6 +46,15 @@ export class BootScene {
     if (this._elapsed >= this._loadDuration) {
       this._done = true;
       this._onSceneChange(SCENES.TITLE);
+    }
+
+    this._glitchTimer += dt;
+    if (this._glitchTimer > 0.3 + Math.random() * 0.5) {
+      this._glitchTimer = 0;
+      this._glitchIntensity = 1.0;
+    }
+    if (this._glitchIntensity > 0) {
+      this._glitchIntensity -= dt * 0.15;
     }
   }
 
@@ -86,7 +99,7 @@ export class BootScene {
     ctx.font = `bold ${fontSize}px Courier New`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('ISLAND NIGHT WATCH', w / 2, h * 0.35);
+    ctx.fillText(i18n.t('gameTitle'), w / 2, h * 0.35);
 
     // Loading label
     const fontSizeSmall = Math.min(16, h * 0.022);
@@ -116,6 +129,10 @@ export class BootScene {
 
     // Scanline effect
     this._drawScanlines(ctx, w, h);
+
+    if (this._glitchIntensity > 0) {
+      this._drawGlitch(ctx, w, h);
+    }
   }
 
   /** Draw subtle scanline overlay for atmosphere */
@@ -124,6 +141,23 @@ export class BootScene {
     ctx.fillStyle = 'rgba(0, 0, 0, 0.03)';
     for (let y = 0; y < h; y += spacing) {
       ctx.fillRect(0, y, w, 1);
+    }
+  }
+
+  _drawGlitch(ctx, w, h) {
+    const intensity = Math.max(0, this._glitchIntensity);
+    if (intensity <= 0) return;
+
+    const noiseMultiplier = intensity;
+
+    if (Math.random() < 0.5 * noiseMultiplier) {
+      const numLines = Math.floor(Math.random() * 10 * noiseMultiplier + 4);
+      for (let i = 0; i < numLines; i++) {
+        const ny = Math.random() * h;
+        const nh = Math.random() * 8 + 3;
+        ctx.fillStyle = `rgba(180, 180, 180, ${Math.random() * 0.3 * noiseMultiplier})`;
+        ctx.fillRect(0, ny, w, nh);
+      }
     }
   }
 }

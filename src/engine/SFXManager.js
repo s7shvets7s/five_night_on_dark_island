@@ -18,10 +18,46 @@ export class SFXManager {
     this._audio = audioManager;
     this._cache = new Map();       // key -> Audio[]
     this._enabled = true;
+    this._muted = false;
     this._randomEnabled = false;
     this._randomTimer = null;
     this._powerLowPlayed = false;  // prevent spam
     this._lastPowerLowPercent = 100;
+    this._playingSFX = new Set();  // Track currently playing SFX
+  }
+
+  /**
+   * Mute all SFX sounds.
+   */
+  mute() {
+    this._muted = true;
+    this.pauseAll();
+  }
+
+  /**
+   * Unmute all SFX sounds.
+   */
+  unmute() {
+    this._muted = false;
+  }
+
+  /**
+   * Pause all currently playing SFX sounds.
+   */
+  pauseAll() {
+    this._muted = true;
+    this._playingSFX.forEach(audio => {
+      if (!audio.paused) {
+        audio.pause();
+      }
+    });
+  }
+
+  /**
+   * Resume all paused SFX sounds.
+   */
+  resumeAll() {
+    this._muted = false;
   }
 
   /**
@@ -50,7 +86,7 @@ export class SFXManager {
    * @returns {boolean} Whether playback started
    */
   play(key, overrideVolume) {
-    if (!this._enabled) return false;
+    if (!this._enabled || this._muted) return false;
 
     const cached = this._cache.get(key);
     if (!cached || cached.length === 0) return false;
@@ -75,7 +111,10 @@ export class SFXManager {
       audio.currentTime = 0;
       const vol = overrideVolume !== undefined ? overrideVolume : (config.volume ?? 1);
       audio.volume = vol;
+      this._playingSFX.add(audio);
+      audio.onended = () => this._playingSFX.delete(audio);
       audio.play().catch((e) => {
+        this._playingSFX.delete(audio);
         console.warn(`[SFXManager] Playback failed for '${key}':`, e.message);
       });
       return true;

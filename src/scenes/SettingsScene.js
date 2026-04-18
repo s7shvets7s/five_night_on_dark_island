@@ -3,18 +3,28 @@ import { i18n } from '../i18n/index.js';
 import { eventBus } from '../engine/EventBus.js';
 
 export class SettingsScene {
-  constructor({ onSceneChange, inputManager, audioManager, sfxManager }) {
+  constructor({ onSceneChange, inputManager, audioManager, sfxManager, assetLoader = null }) {
     this._onSceneChange = onSceneChange;
     this._inputManager = inputManager;
     this._audioManager = audioManager;
     this._sfxManager = sfxManager;
+    this._assetLoader = assetLoader;
     this._buttons = [];
     this._draggingMaster = false;
     this._draggingMusic = false;
     this._draggingSFX = false;
+    this._zoom = 1.0;
+    this._zoomDir = 1;
+    this._zoomSpeed = 0.15;
+    this._glitchTimer = 0;
+    this._glitchIntensity = 0;
   }
 
   enter() {
+    this._zoom = 1.0;
+    this._zoomDir = 1;
+    this._glitchTimer = 0;
+    this._glitchIntensity = 0;
     this._bindInput();
     i18n.setLocale(gameState.getLocale());
   }
@@ -23,7 +33,24 @@ export class SettingsScene {
     this._inputManager.clearAll();
   }
 
-  update(dt) {}
+  update(dt) {
+    this._zoom += this._zoomDir * this._zoomSpeed * dt;
+    if (this._zoom >= 1.25) {
+      this._zoom = 1.25;
+      this._zoomDir = -1;
+    } else if (this._zoom <= 1.0) {
+      this._zoom = 1.0;
+      this._zoomDir = 1;
+    }
+    this._glitchTimer += dt;
+    if (this._glitchTimer > 0.3 + Math.random() * 0.5) {
+      this._glitchTimer = 0;
+      this._glitchIntensity = 1.0;
+    }
+    if (this._glitchIntensity > 0) {
+      this._glitchIntensity -= dt * 0.15;
+    }
+  }
 
   render(ctx, w, h) {
     const fw = Number(w);
@@ -32,8 +59,27 @@ export class SettingsScene {
 
     this._buttons = [];
 
-    ctx.fillStyle = '#0a0a0a';
-    ctx.fillRect(0, 0, fw, fh);
+    const bgImage = this._assetLoader?.getImage('menusbackground');
+
+    if (bgImage) {
+      ctx.save();
+      const cx = fw / 2;
+      const cy = fh / 2;
+      ctx.translate(cx, cy);
+      ctx.scale(this._zoom, this._zoom);
+      ctx.translate(-cx, -cy);
+
+      const scale = Math.max(fw / bgImage.width, fh / bgImage.height);
+      const bw = bgImage.width * scale;
+      const bh = bgImage.height * scale;
+      const bx = (fw - bw) / 2;
+      const by = (fh - bh) / 2;
+      ctx.drawImage(bgImage, bx, by, bw, bh);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(0, 0, fw, fh);
+    }
 
     const maxDim = Math.max(fw, fh);
     const vignette = ctx.createRadialGradient(fw / 2, fh / 2, maxDim * 0.2, fw / 2, fh / 2, maxDim * 0.8);
@@ -41,6 +87,10 @@ export class SettingsScene {
     vignette.addColorStop(1, 'rgba(0, 0, 0, 0.7)');
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, fw, fh);
+
+    if (this._glitchIntensity > 0) {
+      this._drawGlitch(ctx, fw, fh);
+    }
 
     const fontSizeTitle = Math.min(36, h * 0.05);
     ctx.fillStyle = COLORS.ACCENT_RED;
@@ -59,8 +109,8 @@ export class SettingsScene {
   }
 
   _renderLanguageButtons(ctx, w, h) {
-    const btnW = Math.min(120, w * 0.2);
-    const btnH = Math.max(40, h * 0.06);
+    const btnW = Math.min(80, w * 0.12);
+    const btnH = Math.max(36, h * 0.05);
     const startY = h * 0.25;
 
     ctx.fillStyle = COLORS.TEXT_SECONDARY;
@@ -70,35 +120,46 @@ export class SettingsScene {
     ctx.fillText(i18n.t('settingsLanguage') + ':', w * 0.25, startY + btnH / 2);
 
     const currentLocale = i18n.getLocale();
-    const nextLocale = currentLocale === 'ru' ? 'en' : 'ru';
-    const label = currentLocale === 'ru' ? 'English' : 'Русский';
+    const languages = [
+      { code: 'ru', label: 'Русский' },
+      { code: 'en', label: 'English' },
+    ];
 
-    const btnX = w * 0.55;
+    const gap = 8;
+    const totalW = languages.length * btnW + (languages.length - 1) * gap;
+    const startX = w * 0.55;
 
-    this._buttons.push({
-      label: 'lang_toggle',
-      x: btnX,
-      y: startY,
-      w: btnW,
-      h: btnH,
-      action: () => {
-        i18n.setLocale(nextLocale);
-        gameState.setLocale(nextLocale);
-      },
-      enabled: true,
+    languages.forEach((lang, i) => {
+      const btnX = startX + i * (btnW + gap);
+      const isActive = lang.code === currentLocale;
+
+      this._buttons.push({
+        label: 'lang_' + lang.code,
+        x: btnX,
+        y: startY,
+        w: btnW,
+        h: btnH,
+        action: () => {
+          if (!isActive) {
+            i18n.setLocale(lang.code);
+            gameState.setLocale(lang.code);
+          }
+        },
+        enabled: !isActive,
+      });
+
+      ctx.fillStyle = isActive ? '#3a1a1a' : COLORS.UI_BG;
+      ctx.fillRect(btnX, startY, btnW, btnH);
+      ctx.strokeStyle = isActive ? COLORS.ACCENT_RED : COLORS.UI_BORDER;
+      ctx.lineWidth = isActive ? 2 : 1;
+      ctx.strokeRect(btnX, startY, btnW, btnH);
+
+      ctx.fillStyle = isActive ? COLORS.ACCENT_RED : COLORS.TEXT_SECONDARY;
+      ctx.font = `bold ${Math.min(11, h * 0.015)}px Courier New`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(lang.label, btnX + btnW / 2, startY + btnH / 2);
     });
-
-    ctx.fillStyle = COLORS.UI_BG;
-    ctx.fillRect(btnX, startY, btnW, btnH);
-    ctx.strokeStyle = COLORS.ACCENT_RED;
-    ctx.lineWidth = 2;
-    ctx.strokeRect(btnX, startY, btnW, btnH);
-
-    ctx.fillStyle = COLORS.TEXT_PRIMARY;
-    ctx.font = `bold ${Math.min(12, h * 0.016)}px Courier New`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(label, btnX + btnW / 2, startY + btnH / 2);
   }
 
   _renderMasterVolumeSlider(ctx, w, h) {
@@ -335,6 +396,23 @@ export class SettingsScene {
       this._draggingMusic = false;
       this._draggingSFX = false;
     });
+  }
+
+  _drawGlitch(ctx, w, h) {
+    const intensity = Math.max(0, this._glitchIntensity);
+    if (intensity <= 0) return;
+
+    const noiseMultiplier = intensity;
+
+    if (Math.random() < 0.5 * noiseMultiplier) {
+      const numLines = Math.floor(Math.random() * 10 * noiseMultiplier + 4);
+      for (let i = 0; i < numLines; i++) {
+        const ny = Math.random() * h;
+        const nh = Math.random() * 8 + 3;
+        ctx.fillStyle = `rgba(180, 180, 180, ${Math.random() * 0.3 * noiseMultiplier})`;
+        ctx.fillRect(0, ny, w, nh);
+      }
+    }
   }
 
   _updateMasterVolume(x) {

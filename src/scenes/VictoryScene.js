@@ -73,7 +73,7 @@ export class VictoryScene {
     ctx.fillText(i18n.t('victoryTitle'), w / 2, h * 0.3);
 
     // Night complete
-    const nightName = NIGHT_MAP[this._nightId]?.name || `Night ${this._nightId}`;
+    const nightName = i18n.t(`nightName${this._nightId}`);
     const fontSizeSub = Math.min(UI.FONT_SUBTITLE, h * 0.025);
     ctx.fillStyle = COLORS.POWER_OK;
     ctx.font = `${fontSizeSub}px Courier New`;

@@ -4,6 +4,7 @@
  * Glitch is per-camera, not global.
  */
 import { CAMERA_GLITCH, CONFIG } from '../config/gameConfig.js';
+import { i18n } from '../i18n/index.js';
 
 export class CameraGlitchMiniGame {
   /**
@@ -278,11 +279,11 @@ export class CameraGlitchMiniGame {
     ctx.fillStyle = '#ff3333';
     ctx.font = 'bold 18px Courier New';
     ctx.textAlign = 'center';
-    ctx.fillText('CAMERA MALFUNCTION', w / 2, h * 0.08);
+    ctx.fillText(i18n.t('cameraMalfunction'), w / 2, h * 0.08);
 
     const instruction = this._ascending
-      ? 'Click numbers in ASCENDING order'
-      : 'Click numbers in DESCENDING order';
+      ? i18n.t('glitchAscending')
+      : i18n.t('glitchDescending');
     ctx.fillStyle = this._ascending ? '#44ff44' : '#ff4444';
     ctx.font = '14px Courier New';
     ctx.fillText(instruction, w / 2, h * 0.13);

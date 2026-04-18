@@ -4,14 +4,24 @@ import { i18n } from '../i18n/index.js';
 import { eventBus } from '../engine/EventBus.js';
 
 export class NightSelectScene {
-  constructor({ onSceneChange, inputManager, sfxManager }) {
+  constructor({ onSceneChange, inputManager, sfxManager, assetLoader }) {
     this._onSceneChange = onSceneChange;
     this._inputManager = inputManager;
     this._sfxManager = sfxManager;
+    this._assetLoader = assetLoader;
     this._buttons = [];
+    this._zoom = 1.0;
+    this._zoomDir = 1;
+    this._zoomSpeed = 0.15;
+    this._glitchTimer = 0;
+    this._glitchIntensity = 0;
   }
 
   enter() {
+    this._zoom = 1.0;
+    this._zoomDir = 1;
+    this._glitchTimer = 0;
+    this._glitchIntensity = 0;
     this._bindInput();
   }
 
@@ -19,15 +29,51 @@ export class NightSelectScene {
     this._inputManager.clearAll();
   }
 
-  update(dt) {}
+  update(dt) {
+    this._zoom += this._zoomDir * this._zoomSpeed * dt;
+    if (this._zoom >= 1.25) {
+      this._zoom = 1.25;
+      this._zoomDir = -1;
+    } else if (this._zoom <= 1.0) {
+      this._zoom = 1.0;
+      this._zoomDir = 1;
+    }
+    this._glitchTimer += dt;
+    if (this._glitchTimer > 0.3 + Math.random() * 0.5) {
+      this._glitchTimer = 0;
+      this._glitchIntensity = 1.0;
+    }
+    if (this._glitchIntensity > 0) {
+      this._glitchIntensity -= dt * 0.15;
+    }
+  }
 
   render(ctx, w, h) {
     const fw = Number(w);
     const fh = Number(h);
     if (!isFinite(fw) || !isFinite(fh) || fw < 1 || fh < 1) return;
 
-    ctx.fillStyle = '#0a0a0a';
-    ctx.fillRect(0, 0, fw, fh);
+    const bgImage = this._assetLoader?.getImage('menusbackground');
+
+    if (bgImage) {
+      ctx.save();
+      const cx = fw / 2;
+      const cy = fh / 2;
+      ctx.translate(cx, cy);
+      ctx.scale(this._zoom, this._zoom);
+      ctx.translate(-cx, -cy);
+
+      const scale = Math.max(fw / bgImage.width, fh / bgImage.height);
+      const bw = bgImage.width * scale;
+      const bh = bgImage.height * scale;
+      const bx = (fw - bw) / 2;
+      const by = (fh - bh) / 2;
+      ctx.drawImage(bgImage, bx, by, bw, bh);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fillRect(0, 0, fw, fh);
+    }
 
     const maxDim = Math.max(fw, fh);
     const vignette = ctx.createRadialGradient(fw / 2, fh / 2, maxDim * 0.2, fw / 2, fh / 2, maxDim * 0.8);
@@ -35,6 +81,10 @@ export class NightSelectScene {
     vignette.addColorStop(1, 'rgba(0, 0, 0, 0.7)');
     ctx.fillStyle = vignette;
     ctx.fillRect(0, 0, fw, fh);
+
+    if (this._glitchIntensity > 0) {
+      this._drawGlitch(ctx, fw, fh);
+    }
 
     const fontSizeTitle = Math.min(36, h * 0.05);
     ctx.fillStyle = COLORS.ACCENT_RED;
@@ -72,7 +122,7 @@ export class NightSelectScene {
       let bgColor = COLORS.UI_BG;
       let textColor = COLORS.TEXT_PRIMARY;
       let borderColor = COLORS.UI_BORDER;
-      const label = i18n.t('nightN', { night: night.id });
+      const label = i18n.t(`nightName${night.id}`);
       let sublabel = '';
 
       if (!isUnlocked) {
@@ -167,5 +217,22 @@ export class NightSelectScene {
         }
       }
     });
+  }
+
+  _drawGlitch(ctx, w, h) {
+    const intensity = Math.max(0, this._glitchIntensity);
+    if (intensity <= 0) return;
+
+    const noiseMultiplier = intensity;
+
+    if (Math.random() < 0.5 * noiseMultiplier) {
+      const numLines = Math.floor(Math.random() * 10 * noiseMultiplier + 4);
+      for (let i = 0; i < numLines; i++) {
+        const ny = Math.random() * h;
+        const nh = Math.random() * 8 + 3;
+        ctx.fillStyle = `rgba(180, 180, 180, ${Math.random() * 0.3 * noiseMultiplier})`;
+        ctx.fillRect(0, ny, w, nh);
+      }
+    }
   }
 }

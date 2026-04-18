@@ -2,6 +2,8 @@
  * ClockSystem — manages game time progression.
  * 6 in-game hours per night.
  */
+import { i18n } from '../i18n/index.js';
+
 export class ClockSystem {
   /**
    * @param {Object} deps
@@ -53,11 +55,10 @@ export class ClockSystem {
   /** @returns {number} Current hour (0-6) */
   get currentHour() { return this._currentHour; }
 
-  /** @returns {string} Display time (e.g., "12 AM", "3 AM") */
+  /** @returns {string} Display time (e.g., "12:00", "3:00") */
   get displayTime() {
-    if (this._currentHour === 0) return '12 AM';
-    if (this._currentHour === 6) return '6 AM';
-    return `${this._currentHour} AM`;
+    if (this._currentHour === 0) return i18n.t('time12');
+    return i18n.t('timeHour', { hour: this._currentHour });
   }
 
   /** @returns {number} Progress through current hour (0-1) */
