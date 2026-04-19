@@ -4,11 +4,12 @@ import { i18n } from '../i18n/index.js';
 import { eventBus } from '../engine/EventBus.js';
 
 export class NightSelectScene {
-  constructor({ onSceneChange, inputManager, sfxManager, assetLoader }) {
+  constructor({ onSceneChange, inputManager, sfxManager, assetLoader,yandexSDK }) {
     this._onSceneChange = onSceneChange;
     this._inputManager = inputManager;
     this._sfxManager = sfxManager;
     this._assetLoader = assetLoader;
+    this._yandexSDK = yandexSDK;
     this._buttons = [];
     this._zoom = 1.0;
     this._zoomDir = 1;
@@ -23,6 +24,7 @@ export class NightSelectScene {
     this._glitchTimer = 0;
     this._glitchIntensity = 0;
     this._bindInput();
+    this._yandexSDK?.gameplayStop(); 
   }
 
   exit() {

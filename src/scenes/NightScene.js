@@ -32,7 +32,7 @@ export class NightScene {
    * @param {Object} [deps.ads]
    * @param {number} [deps.nightId]
    */
-  constructor({ onSceneChange, onPause, inputManager, audioManager, sfxManager, assetLoader, ads, nightId }) {
+  constructor({ onSceneChange, onPause, inputManager, audioManager, sfxManager, assetLoader, ads,yandexSDK, nightId }) {
     this._onSceneChange = onSceneChange;
     this._onPause = onPause;
     this._inputManager = inputManager;
@@ -40,6 +40,7 @@ export class NightScene {
     this._sfxManager = sfxManager;
     this._assetLoader = assetLoader;
     this._ads = ads;
+    this._yandexSDK = yandexSDK;
     this._adShowing = false;
 
     this._powerSystem = new PowerSystem({ eventBus });
@@ -142,10 +143,11 @@ export class NightScene {
       this._enemies.push(enemy);
       this._enemyStartHours.set(enemy.id, spawn.startHour);
     }
-
+    
     this._bindInput();
     this._bindSFX();
     this._updateHUD();
+    
   }
 
   /** Called when returning to this scene (e.g. after pause pop). */
@@ -154,6 +156,7 @@ export class NightScene {
   }
 
   exit() {
+    this._yandexSDK?.gameplayStop(); 
     this._unbindSFX();
     this._audioManager?.stopAll();
     this._audioManager?.stopCameraStaticNoise();

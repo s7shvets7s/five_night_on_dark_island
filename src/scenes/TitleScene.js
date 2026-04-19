@@ -3,12 +3,13 @@ import { i18n } from '../i18n/index.js';
 import { eventBus } from '../engine/EventBus.js';
 
 export class TitleScene {
-  constructor({ onSceneChange, inputManager, audioManager, sfxManager, assetLoader }) {
+  constructor({ onSceneChange, inputManager, audioManager, sfxManager, assetLoader,yandexSDK }) {
     this._onSceneChange = onSceneChange;
     this._inputManager = inputManager;
     this._audioManager = audioManager;
     this._sfxManager = sfxManager;
     this._assetLoader = assetLoader;
+    this._yandexSDK = yandexSDK;
     this._buttons = [];
     this._pulsePhase = 0;
     this._zoom = 1.0;
@@ -25,6 +26,7 @@ export class TitleScene {
     this._glitchTimer = 0;
     this._glitchIntensity = 0;
     this._bindInput();
+    
   }
 
   exit() {
