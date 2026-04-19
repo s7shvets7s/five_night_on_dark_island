@@ -869,23 +869,21 @@ export class NightScene {
     this._sfxManager?.play('powerOut');
   }
 
-  async _onJumpscare(enemy) {
-    // Rare event: show ad instead of jumpscare — enemy "escapes"
+  _onJumpscare(enemy) {
     if (!this._adShowing && Math.random() < RANDOM_AD_CHANCE) {
       this._adShowing = true;
       enemy.setState(ENEMY_STATES.PATROL);
       enemy.setAggression(Math.max(0, enemy.aggression - 5));
-      // Move enemy back to previous room so it doesn't instantly attack again
       const prevRoom = enemy.previousRoom;
       if (prevRoom) {
         enemy.startTransitTo(prevRoom, 2000);
       }
-      try {
-        await this._ads?.showInterstitial();
-      } finally {
-        this._adShowing = false;
-      }
-      return; // No jumpscare, game continues
+      setTimeout(() => {
+        this._ads?.showInterstitial(() => {
+          this._adShowing = false;
+        });
+      }, CONFIG.AD_TRIGGER_DELAY);
+      return;
     }
 
     this._jumpscareSystem.trigger(enemy, () => {

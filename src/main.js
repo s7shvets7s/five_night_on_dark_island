@@ -93,7 +93,7 @@ async function bootstrap() {
   setupSdkPauseHandling(game, audioManager, sfxManager);
 
   // Initialize Yandex ads
-  const ads = new YandexAds(yandexSDK, audioManager, sfxManager, yandexSDK);
+  const ads = new YandexAds(yandexSDK, audioManager, sfxManager, yandexSDK, game.inputManager);
 
   const imageManifest = {
     menusbackground: 'scenes/menusbackground.png',
@@ -159,6 +159,7 @@ async function bootstrap() {
     assetLoader: game.assetLoader,
     ads,
     yandexSDK,
+    nightId: currentNightId,
   };
 
   game.registerScene(SCENES.BOOT, new BootScene(sceneDeps));
@@ -240,38 +241,86 @@ const musicTracks = [
 
 /**
  * Setup SDK pause/resume event handlers.
- * Pauses audio and gameplay when app is minimized.
- * Handles startup ad and SDK events properly.
- * Follows Yandex SDK requirements for gameplay markup.
+ * Follows Yandex SDK requirements for gameplay markup exactly.
+ * Handles startup ad - game starts ONLY after resume.
+ * Ref: https://yandex.ru/dev/games/doc/ru/sdk/sdk-events#startup-ad-example
  */
 function setupSdkPauseHandling(game, audioManager, sfxManager) {
   let gameStarted = false;
   let isPaused = false;
+  const isPausedRef = { value: false };
 
-  const doPause = () => {
-    if (isPaused) return;
-    isPaused = true;
+  const pauseGame = () => {
+    isPausedRef.value = true;
     audioManager?.pauseAll();
     sfxManager?.mute();
     yandexSDK.gameplayStop();
   };
 
-  const doResume = () => {
-    if (!isPaused) return;
-    isPaused = false;
-    if (gameStarted) {
+  const resumeGame = () => {
+    isPausedRef.value = false;
+    if (!gameStarted) {
+      gameStarted = true;
+      if (window._gameStarted) {
+        window._gameStarted.started = true;
+      }
       yandexSDK.gameplayStart();
     }
     audioManager?.resumeAll();
     sfxManager?.unmute();
   };
 
-  // Mark game as started when entering gameplay
-  yandexSDK.on('gameplayStarted', () => {
-    gameStarted = true;
-  });
+  const handlePause = () => {
+    console.log('[Yandex] game_api_pause received');
+    isPaused = true;
+    pauseGame();
+  };
 
-  // 1. Visibility API — основной способ (сработает при сворачивании/переключении вкладок)
+  const handleResume = () => {
+    console.log('[Yandex] game_api_resume received');
+    isPaused = false;
+    if (!gameStarted) {
+      gameStarted = true;
+      if (window._gameStarted) {
+        window._gameStarted.started = true;
+      }
+      console.log('[Yandex] Game starting after startup ad');
+    }
+    resumeGame();
+  };
+
+  const doPause = () => {
+    if (isPaused) return;
+    isPaused = true;
+    pauseGame();
+  };
+
+  const doResume = () => {
+    if (!isPaused) return;
+    isPaused = false;
+    if (gameStarted) {
+      resumeGame();
+    }
+  };
+
+  // Subscribe to Yandex SDK pause/resume events (for startup ad, tab switching, etc.)
+  if (yandexSDK.isAvailable && yandexSDK.sdk) {
+    yandexSDK.on('game_api_pause', handlePause);
+    yandexSDK.on('game_api_resume', handleResume);
+    console.log('[Yandex] Subscribed to game_api_pause/game_api_resume');
+  }
+
+  // If no startup ad (isPaused = false), game can start immediately
+  // If there was startup ad, game will start when game_api_resume fires
+  if (!isPaused) {
+    gameStarted = true;
+    if (window._gameStarted) {
+      window._gameStarted.started = true;
+    }
+    console.log('[Yandex] Game ready to start (no startup ad)');
+  }
+
+  // 1. Visibility API — сработает при сворачивании/переключении вкладок
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden' || document.hidden) {
       doPause();
@@ -280,15 +329,7 @@ function setupSdkPauseHandling(game, audioManager, sfxManager) {
     }
   });
 
-  // 2. Window blur/focus — дополнительный способ (сработает при клике вне окна)
-  window.addEventListener('blur', doPause);
-  window.addEventListener('focus', doResume);
-
-  // 3. Yandex SDK events
-  if (yandexSDK.isAvailable && yandexSDK.sdk) {
-    yandexSDK.on('game_api_pause', doPause);
-    yandexSDK.on('game_api_resume', doResume);
-  }
+  // NOTE: Убран window blur/focus - Yandex SDK сам обрабатывает game_api_pause/game_api_resume
 }
 
 /**

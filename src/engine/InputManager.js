@@ -118,6 +118,12 @@ export class InputManager {
     this._listeners.clear();
   }
 
+  /** Reset pointer position - call after ad closes */
+  resetPointer() {
+    this._pointerPos = null;
+    this._keysDown.clear();
+  }
+
   /** @returns {boolean} */
   isKeyDown(key) {
     return this._keysDown.has(key.toLowerCase());

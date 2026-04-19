@@ -1,11 +1,12 @@
 /**
  * GameOverScene — game over screen with jumpscare aftermath.
  */
-import { SCENES, COLORS, UI } from '../config/gameConfig.js';
+import { SCENES, COLORS, UI, CONFIG } from '../config/gameConfig.js';
 import { Renderer } from '../engine/Renderer.js';
 import { eventBus } from '../engine/EventBus.js';
 import { DEFAULT_NIGHT_ID } from '../data/nights.js';
 import { i18n } from '../i18n/index.js';
+
 
 export class GameOverScene {
   constructor({ baseWidth, baseHeight, onSceneChange, inputManager, ads }) {
@@ -22,6 +23,7 @@ export class GameOverScene {
     };
   }
 
+
   enter() {
     this._elapsed = 0;
     this._canInteract = false;
@@ -29,10 +31,12 @@ export class GameOverScene {
     this._bindInput();
   }
 
+
   exit() {
     eventBus.off('game:over', this._onGameOver);
     this._inputManager.clearAll();
   }
+
 
   update(dt) {
     this._elapsed += dt * 1000;
@@ -40,6 +44,7 @@ export class GameOverScene {
       this._canInteract = true;
     }
   }
+
 
   /**
    * @param {CanvasRenderingContext2D} ctx
@@ -88,23 +93,28 @@ export class GameOverScene {
     Renderer.scanlines(ctx, w, h);
   }
 
+
   _bindInput() {
-    this._inputManager.on('pointerdown', async () => {
-      if (this._canInteract && !this._adShowing) {
-        this._adShowing = true;
+    this._inputManager.on('pointerdown', () => {
+      if (!this._canInteract || this._adShowing) return;
 
-        try {
-          // Show interstitial ad
-          const adShown = await this._ads?.showInterstitial();
+      this._adShowing = true;
 
-          // Brief delay so user sees transition (ad may have been instant)
-          await new Promise(resolve => setTimeout(resolve, adShown ? 1500 : 500));
-        } finally {
-          this._adShowing = false;
+      const finishGameOver = () => {
+        this._adShowing = false;
+        this._onSceneChange(SCENES.NIGHT, { nightId: this._retryNightId });
+      };
+
+      setTimeout(() => {
+        if (this._ads?.showInterstitial) {
+          this._ads.showInterstitial({
+            onClose: () => finishGameOver(),
+            onError: () => finishGameOver(),
+          });
+        } else {
+          finishGameOver();
         }
-
-        this._onSceneChange(SCENES.TITLE);
-      }
+      }, CONFIG.AD_TRIGGER_DELAY);
     });
   }
 }

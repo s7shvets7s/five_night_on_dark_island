@@ -12,6 +12,8 @@ export const CONFIG = {
   AUTO_WIN_FOR_TEST: false,
   DISABLE_ADS: false,
   GOD_MODE: false,
+  /** Yandex requirement: delay between user action and ad must be ≤333ms */
+  AD_TRIGGER_DELAY: 250,
   MASK_DURATION: 10,
   MASK_COOLDOWN: 10,
   DOOR_COOLDOWN: 5,

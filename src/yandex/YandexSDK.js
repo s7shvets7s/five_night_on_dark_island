@@ -84,27 +84,35 @@ export class YandexSDK {
     this._mockData = { ...data };
   }
 
-/** Show fullscreen ad */
-  async showFullscreenAdv(audioManager = null, sfxManager = null) {
-    if (audioManager) {
-      audioManager.pauseAll();
-    }
-    if (sfxManager) {
-      sfxManager.mute();
-    }
+/** Show fullscreen ad with proper callbacks per Yandex requirements */
+  async showFullscreenAdv(audioManager = null, sfxManager = null, onCloseCallback = null) {
+    if (audioManager) audioManager.pauseAll();
+    if (sfxManager) sfxManager.mute();
+
     let adShown = false;
-    if (this._sdk) {
+    if (this._sdk?.adv) {
       try {
-        await this._sdk.adv.showFullscreenAdv();
-        adShown = true;
-      } catch (e) { /* fallback */ }
+        const result = await new Promise((resolve, reject) => {
+          this._sdk.adv.showFullscreenAdv({
+            callbacks: {
+              onOpen: () => { /* ad opened - keep audio paused */ },
+              onClose: (wasShown) => { resolve(wasShown); },
+              onError: (err) => { reject(err); }
+            }
+          });
+        });
+        adShown = result ?? false;
+      } catch (e) {
+        console.warn('[YandexSDK] Fullscreen ad error:', e);
+      }
+    } else {
+      await new Promise(r => setTimeout(r, 1000));
     }
-    if (audioManager) {
-      audioManager.resumeAll();
-    }
-    if (sfxManager) {
-      sfxManager.unmute();
-    }
+
+    if (audioManager) audioManager.resumeAll();
+    if (sfxManager) sfxManager.unmute();
+
+    if (onCloseCallback) onCloseCallback(adShown);
     return adShown;
   }
 
