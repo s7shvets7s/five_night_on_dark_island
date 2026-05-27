@@ -155,6 +155,9 @@ export class AudioManager {
   /** @returns {number} */
   get musicVolume() { return this._musicVolume; }
 
+  /** @returns {number} */
+  get sfxVolume() { return this._sfxVolume; }
+
   /** Shuffle array using Fisher-Yates algorithm */
   _shuffleArray(arr) {
     for (let i = arr.length - 1; i > 0; i--) {

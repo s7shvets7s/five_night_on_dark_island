@@ -10,7 +10,6 @@ export class SettingsScene {
     this._sfxManager = sfxManager;
     this._assetLoader = assetLoader;
     this._buttons = [];
-    this._draggingMaster = false;
     this._draggingMusic = false;
     this._draggingSFX = false;
     this._zoom = 1.0;
@@ -100,7 +99,6 @@ export class SettingsScene {
     ctx.fillText(i18n.t('settingsTitle'), w / 2, h * 0.1);
 
     this._renderLanguageButtons(ctx, w, h);
-    this._renderMasterVolumeSlider(ctx, w, h);
     this._renderMusicVolumeSlider(ctx, w, h);
     this._renderSFXVolumeSlider(ctx, w, h);
     this._renderBackButton(ctx, w, h);
@@ -162,57 +160,10 @@ export class SettingsScene {
     });
   }
 
-  _renderMasterVolumeSlider(ctx, w, h) {
-    const sliderW = Math.min(200, w * 0.4);
-    const sliderH = 8;
-    const startY = h * 0.42;
-    const knobR = 12;
-
-    ctx.fillStyle = COLORS.TEXT_SECONDARY;
-    ctx.font = `${Math.min(14, h * 0.02)}px Courier New`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(i18n.t('settingsVolume') + ':', w * 0.25, startY + knobR);
-
-    const sliderX = w * 0.55;
-    const sliderY = startY + knobR - sliderH / 2;
-
-    this._masterSlider = {
-      x: sliderX,
-      y: sliderY,
-      w: sliderW,
-      h: sliderH,
-    };
-
-    ctx.fillStyle = '#1a1a1a';
-    ctx.fillRect(sliderX, sliderY, sliderW, sliderH);
-
-    const volume = gameState.getVolume();
-    const fillW = volume * sliderW;
-    ctx.fillStyle = COLORS.ACCENT_RED;
-    ctx.fillRect(sliderX, sliderY, fillW, sliderH);
-
-    ctx.strokeStyle = COLORS.UI_BORDER;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(sliderX, sliderY, sliderW, sliderH);
-
-    const knobX = sliderX + fillW;
-    ctx.fillStyle = COLORS.TEXT_PRIMARY;
-    ctx.beginPath();
-    ctx.arc(knobX, sliderY + sliderH / 2, knobR, 0, Math.PI * 2);
-    ctx.fill();
-
-    ctx.fillStyle = '#000000';
-    ctx.font = `${Math.min(10, h * 0.014)}px Courier New`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(Math.round(volume * 100) + '%', knobX, sliderY + sliderH / 2);
-  }
-
   _renderMusicVolumeSlider(ctx, w, h) {
     const sliderW = Math.min(200, w * 0.4);
     const sliderH = 8;
-    const startY = h * 0.54;
+    const startY = h * 0.42;
     const knobR = 12;
 
     ctx.fillStyle = COLORS.TEXT_SECONDARY;
@@ -259,7 +210,7 @@ export class SettingsScene {
   _renderSFXVolumeSlider(ctx, w, h) {
     const sliderW = Math.min(200, w * 0.4);
     const sliderH = 8;
-    const startY = h * 0.66;
+    const startY = h * 0.52;
     const knobR = 12;
 
     ctx.fillStyle = COLORS.TEXT_SECONDARY;
@@ -342,15 +293,6 @@ export class SettingsScene {
 
   _bindInput() {
     this._inputManager.on('pointerdown', (x, y) => {
-      if (this._masterSlider) {
-        const s = this._masterSlider;
-        if (x >= s.x && x <= s.x + s.w && y >= s.y - 10 && y <= s.y + s.h + 10) {
-          this._draggingMaster = true;
-          this._updateMasterVolume(x);
-          return;
-        }
-      }
-
       if (this._musicSlider) {
         const s = this._musicSlider;
         if (x >= s.x && x <= s.x + s.w && y >= s.y - 10 && y <= s.y + s.h + 10) {
@@ -380,9 +322,6 @@ export class SettingsScene {
     });
 
     this._inputManager.on('pointermove', (x, y) => {
-      if (this._draggingMaster) {
-        this._updateMasterVolume(x);
-      }
       if (this._draggingMusic) {
         this._updateMusicVolume(x);
       }
@@ -392,7 +331,6 @@ export class SettingsScene {
     });
 
     this._inputManager.on('pointerup', () => {
-      this._draggingMaster = false;
       this._draggingMusic = false;
       this._draggingSFX = false;
     });
@@ -413,21 +351,6 @@ export class SettingsScene {
         ctx.fillRect(0, ny, w, nh);
       }
     }
-  }
-
-  _updateMasterVolume(x) {
-    const s = this._masterSlider;
-    if (!s) return;
-
-    let vol = (x - s.x) / s.w;
-    vol = Math.max(0, Math.min(1, vol));
-    gameState.setVolume(vol);
-
-    if (this._audioManager) {
-      this._audioManager.setMasterVolume(vol);
-    }
-
-    eventBus.emit('settings:change', { key: 'volume', value: vol });
   }
 
   _updateMusicVolume(x) {

@@ -33,7 +33,7 @@ export class SaveSystem {
   /** Load data from cloud and apply to gameState */
   async load() {
     if (!this._player) {
-      console.log('[SaveSystem] No player available, using defaults');
+      //console.log('[SaveSystem] No player available, using defaults');
       return false;
     }
 
@@ -44,11 +44,11 @@ export class SaveSystem {
       if (saved) {
         this._saveData = { ...this._saveData, ...saved };
         this._applyToGameState();
-        console.log('[SaveSystem] Loaded:', this._saveData);
+        //console.log('[SaveSystem] Loaded:', this._saveData);
         return true;
       }
 
-      console.log('[SaveSystem] No save data found');
+      //console.log('[SaveSystem] No save data found');
       return false;
     } catch (e) {
       console.warn('[SaveSystem] Load failed, using defaults:', e);
@@ -67,7 +67,7 @@ export class SaveSystem {
    */
   async save() {
     if (!this._player) {
-      console.log('[SaveSystem] No player available, skipping save');
+      //console.log('[SaveSystem] No player available, skipping save');
       return false;
     }
 
@@ -79,9 +79,9 @@ export class SaveSystem {
     try {
       await this._player.save({ [SAVE_KEY]: this._saveData });
       this._dirty = false;
-      console.log('[SaveSystem] Saved:', this._saveData);
+      //console.log('[SaveSystem] Saved:', this._saveData);
     } catch (e) {
-      console.warn('[SaveSystem] Save failed:', e);
+      //console.warn('[SaveSystem] Save failed:', e);
     }
 
     if (this._audioManager) this._audioManager.resumeAll();

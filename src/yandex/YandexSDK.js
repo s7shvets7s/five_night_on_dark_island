@@ -20,10 +20,10 @@ export class YandexSDK {
         this._initialized = true;
         console.log('[YandexSDK] Initialized');
       } else {
-        console.warn('[YandexSDK] SDK not available, using mock');
+       // console.warn('[YandexSDK] SDK not available, using mock');
       }
     } catch (e) {
-      console.warn('[YandexSDK] Init failed, using mock:', e);
+      //console.warn('[YandexSDK] Init failed, using mock:', e);
     }
     return this;
   }
@@ -42,7 +42,7 @@ export class YandexSDK {
     if (this._sdk?.on) {
       this._sdk.on(eventName, callback);
     } else if (this._initialized === false) {
-      console.warn('[YandexSDK] Cannot subscribe, SDK not initialized');
+      //console.warn('[YandexSDK] Cannot subscribe, SDK not initialized');
     }
   }
 
@@ -142,15 +142,15 @@ export class YandexSDK {
     try {
       if (this._sdk?.features?.LoadingAPI) {
         this._sdk.features.LoadingAPI.ready();
-        console.log('[YandexSDK] LoadingAPI.ready() called');
+        //console.log('[YandexSDK] LoadingAPI.ready() called');
       } else if (window.YaGames?.features?.LoadingAPI) {
         window.YaGames.features.LoadingAPI.ready();
-        console.log('[YandexSDK] LoadingAPI.ready() called (window)');
+       // console.log('[YandexSDK] LoadingAPI.ready() called (window)');
       } else {
-        console.log('[YandexSDK] LoadingAPI not available, skipping');
+       // console.log('[YandexSDK] LoadingAPI not available, skipping');
       }
     } catch (e) {
-      console.warn('[YandexSDK] LoadingAPI.ready() failed:', e);
+      //console.warn('[YandexSDK] LoadingAPI.ready() failed:', e);
     }
   }
 

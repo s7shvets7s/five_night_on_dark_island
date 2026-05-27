@@ -73,12 +73,12 @@ export class YandexAds {
             console.log('[YandexAds] Interstitial opened');
           },
           onClose: (wasShown) => {
-            console.log('[YandexAds] Interstitial closed, wasShown:', wasShown);
+            //console.log('[YandexAds] Interstitial closed, wasShown:', wasShown);
             this._cleanupAfterAd();
             onClose?.(wasShown);
           },
           onError: (error) => {
-            console.error('[YandexAds] Interstitial error:', error);
+            //console.error('[YandexAds] Interstitial error:', error);
             this._cleanupAfterAd();
             // Если передан onError — вызываем его, иначе fallback на onClose
             if (onError) {
@@ -90,7 +90,7 @@ export class YandexAds {
         },
       });
     } else {
-      console.warn('[YandexAds] SDK not available, using mock');
+      //console.warn('[YandexAds] SDK not available, using mock');
       setTimeout(() => {
         this._cleanupAfterAd();
         onClose?.(false);
@@ -110,12 +110,12 @@ export class YandexAds {
   /** Show rewarded ad - uses ONLY callbacks for pause/resume */
   showRewarded(onReward) {
     if (!onReward) {
-      console.warn('[YandexAds] showRewarded requires onReward callback');
+      //console.warn('[YandexAds] showRewarded requires onReward callback');
       return;
     }
 
     if (this._adPending) {
-      console.warn('[YandexAds] Ad already pending, skipping');
+      //console.warn('[YandexAds] Ad already pending, skipping');
       onReward(false);
       return;
     }
@@ -127,27 +127,27 @@ export class YandexAds {
       this._sdk._sdk.adv.showRewardedVideo({
         callbacks: {
           onOpen: () => {
-            console.log('[YandexAds] Rewarded opened');
+            //console.log('[YandexAds] Rewarded opened');
           },
           onRewarded: () => {
-            console.log('[YandexAds] Rewarded completed - reward granted');
+           // console.log('[YandexAds] Rewarded completed - reward granted');
             this._cleanupAfterAd();
             onReward(true);
           },
           onClose: () => {
-            console.log('[YandexAds] Rewarded closed without reward');
+            //console.log('[YandexAds] Rewarded closed without reward');
             this._cleanupAfterAd();
             onReward(false);
           },
           onError: (error) => {
-            console.error('[YandexAds] Rewarded error:', error);
+            //console.error('[YandexAds] Rewarded error:', error);
             this._cleanupAfterAd();
             onReward(false);
           },
         },
       });
     } else {
-      console.warn('[YandexAds] SDK not available, using mock');
+      //console.warn('[YandexAds] SDK not available, using mock');
       setTimeout(() => {
         this._cleanupAfterAd();
         onReward(false);

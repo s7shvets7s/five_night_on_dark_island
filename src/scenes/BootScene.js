@@ -70,7 +70,7 @@ export class BootScene {
     const cx = fw / 2;
     const cy = fh / 2;
     if (!isFinite(fw) || !isFinite(fh) || !isFinite(cx) || !isFinite(cy) || fw < 1 || fh < 1) {
-      console.log('[BootScene] Invalid dims:', w, h, cx, cy);
+     // console.log('[BootScene] Invalid dims:', w, h, cx, cy);
       return;
     }
 

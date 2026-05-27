@@ -28,7 +28,7 @@ import { SaveSystem } from './system/SaveSystem.js';
  */
 async function waitForYaGames(timeout = 15000) {
   const start = Date.now();
-  console.log('[Bootstrap] Waiting for YaGames SDK...');
+  //console.log('[Bootstrap] Waiting for YaGames SDK...');
   
   while (!window.YaGames) {
     if (Date.now() - start > timeout) {
@@ -38,7 +38,7 @@ async function waitForYaGames(timeout = 15000) {
     await new Promise(r => setTimeout(r, 100));
   }
   
-  console.log('[Bootstrap] YaGames SDK detected');
+ // console.log('[Bootstrap] YaGames SDK detected');
   return true;
 }
 
@@ -79,13 +79,14 @@ async function bootstrap() {
     const sdkLang = platformInfo.language;
     if (sdkLang === 'ru' || sdkLang === 'en') {
       gameState.setLocale(sdkLang);
-      console.log(`[Bootstrap] Language detected: ${sdkLang}`);
+      //console.log(`[Bootstrap] Language detected: ${sdkLang}`);
     }
   }
 
   i18n.setLocale(gameState.getLocale());
 
   // Apply loaded volume settings
+  audioManager.setMasterVolume(gameState.getVolume());
   audioManager.setMusicVolume(gameState.getMusicVolume());
   audioManager.setMasterSFXVolume(gameState.getSFXVolume());
 
@@ -190,9 +191,9 @@ async function bootstrap() {
 
   try {
     await game.assetLoader.loadAll();
-    console.log('[Bootstrap] Assets loaded');
+    //console.log('[Bootstrap] Assets loaded');
   } catch (e) {
-    console.log('[Bootstrap] Assets load error (using placeholders)');
+   // console.log('[Bootstrap] Assets load error (using placeholders)');
   }
 
 const musicTracks = [
@@ -220,7 +221,7 @@ const musicTracks = [
   document.addEventListener('touchstart', startMusic, { once: true });
 
   game.start();
-  console.log(`[Bootstrap] ${i18n.t('gameTitle')} v${GAME_VERSION} started`);
+ // console.log(`[Bootstrap] ${i18n.t('gameTitle')} v${GAME_VERSION} started`);
 
   // Subscribe to TV back button (HISTORY_BACK) - shows exit confirmation
   if (yandexSDK.isAvailable && yandexSDK.sdk?.EVENTS) {
@@ -271,20 +272,20 @@ function setupSdkPauseHandling(game, audioManager, sfxManager) {
   };
 
   const handlePause = () => {
-    console.log('[Yandex] game_api_pause received');
+    //console.log('[Yandex] game_api_pause received');
     isPaused = true;
     pauseGame();
   };
 
   const handleResume = () => {
-    console.log('[Yandex] game_api_resume received');
+    //console.log('[Yandex] game_api_resume received');
     isPaused = false;
     if (!gameStarted) {
       gameStarted = true;
       if (window._gameStarted) {
         window._gameStarted.started = true;
       }
-      console.log('[Yandex] Game starting after startup ad');
+      //console.log('[Yandex] Game starting after startup ad');
     }
     resumeGame();
   };
@@ -307,7 +308,7 @@ function setupSdkPauseHandling(game, audioManager, sfxManager) {
   if (yandexSDK.isAvailable && yandexSDK.sdk) {
     yandexSDK.on('game_api_pause', handlePause);
     yandexSDK.on('game_api_resume', handleResume);
-    console.log('[Yandex] Subscribed to game_api_pause/game_api_resume');
+   // console.log('[Yandex] Subscribed to game_api_pause/game_api_resume');
   }
 
   // If no startup ad (isPaused = false), game can start immediately
@@ -317,7 +318,7 @@ function setupSdkPauseHandling(game, audioManager, sfxManager) {
     if (window._gameStarted) {
       window._gameStarted.started = true;
     }
-    console.log('[Yandex] Game ready to start (no startup ad)');
+   // console.log('[Yandex] Game ready to start (no startup ad)');
   }
 
   // 1. Visibility API — сработает при сворачивании/переключении вкладок
@@ -352,13 +353,13 @@ function setupGameStateSaveHooks(saveSystem) {
   // Save when night is completed
   eventBus.on('game:victory', () => {
     saveSystem.markDirty();
-    console.log('[Bootstrap] Save marked dirty (victory)');
+   // console.log('[Bootstrap] Save marked dirty (victory)');
   });
 
   // Save when settings change
   eventBus.on('settings:change', () => {
     saveSystem.markDirty();
-    console.log('[Bootstrap] Save marked dirty (settings)');
+   // console.log('[Bootstrap] Save marked dirty (settings)');
   });
 }
 
@@ -372,13 +373,13 @@ async function lockOrientation() {
   try {
     if (screen.orientation && screen.orientation.lock) {
       await screen.orientation.lock('landscape');
-      console.log('[Bootstrap] Orientation locked to landscape (Screen Orientation API)');
+      //console.log('[Bootstrap] Orientation locked to landscape (Screen Orientation API)');
       return;
     }
   } catch (e) {
-    console.log('[Bootstrap] Orientation lock not supported:', e.message);
+   // console.log('[Bootstrap] Orientation lock not supported:', e.message);
   }
-  console.log('[Bootstrap] Orientation lock skipped — set in Yandex Games draft instead');
+  //console.log('[Bootstrap] Orientation lock skipped — set in Yandex Games draft instead');
 }
 
 bootstrap();

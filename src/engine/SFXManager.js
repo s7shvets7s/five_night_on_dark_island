@@ -109,8 +109,9 @@ export class SFXManager {
     try {
       const audio = audioToPlay.audio || audioToPlay;
       audio.currentTime = 0;
-      const vol = overrideVolume !== undefined ? overrideVolume : (config.volume ?? 1);
-      audio.volume = vol;
+      const baseVol = overrideVolume !== undefined ? overrideVolume : (config.volume ?? 1);
+      const sfxVol = this._audio.sfxVolume;
+      audio.volume = baseVol * sfxVol;
       this._playingSFX.add(audio);
       audio.onended = () => this._playingSFX.delete(audio);
       audio.play().catch((e) => {

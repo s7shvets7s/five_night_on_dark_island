@@ -1,0 +1,22 @@
+node_modules/
+package.json
+package-lock.json
+
+# Archives
+*.zip
+
+# Temp / output
+output.txt
+to_dump.bat
+
+# OS files
+Thumbs.db
+.DS_Store
+Desktop.ini
+
+# Editor
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
