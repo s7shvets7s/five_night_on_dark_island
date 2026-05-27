@@ -5,6 +5,9 @@ package-lock.json
 # Archives
 *.zip
 
+# Uncompressed audio — use .ogg instead
+*.wav
+
 # Temp / output
 output.txt
 to_dump.bat
